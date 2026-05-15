@@ -95,6 +95,11 @@ export default function Registro({ onVolver }) {
         creadoEn: serverTimestamp()
       })
 
+      const fotosCapturadas = Object.entries(fotos)
+        .filter(([, v]) => v !== null)
+        .map(([k]) => ({ ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso', selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio', negInt: '🏬 Interior negocio' }[k]))
+        .join(', ')
+
       const msg =
 `🆕 *NUEVO REGISTRO - Pasanaku-IA*
 
@@ -108,7 +113,14 @@ export default function Registro({ onVolver }) {
 📧 *Email:* ${form.email}
 ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación:* No proporcionada'}
 
-📎 Por favor envía también las fotos de CI y negocio en este chat.
+📸 *Fotos tomadas:* ${fotosCapturadas || 'Ninguna'}
+
+⚠️ *IMPORTANTE:* Envía las fotos en los PRÓXIMOS MENSAJES en este mismo chat:
+1️⃣ Foto CI Anverso
+2️⃣ Foto CI Reverso  
+3️⃣ Selfie sosteniendo el CI
+4️⃣ Foto exterior del negocio (opcional)
+5️⃣ Foto interior del negocio (opcional)
 
 ✅ Datos guardados en sistema Pasanaku-IA`
 
@@ -149,7 +161,6 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
       </div>
 
       <div className="content">
-
         {paso === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">📋 Datos personales</div>
@@ -177,7 +188,9 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
         {paso === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">📸 Fotos de identidad</div>
-            <p style={{ fontSize: 13, color: '#666' }}>Sube las fotos desde tu galería o toma una foto ahora.</p>
+            <p style={{ fontSize: 13, color: '#666' }}>
+              Toma las fotos ahora. Se enviarán por WhatsApp al finalizar el registro.
+            </p>
             {['ciFront', 'ciBack', 'selfie'].map(id => (
               <div key={id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} onClick={() => capturarFoto(id)}>
                 {fotos[id]
@@ -186,10 +199,15 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
                 }
                 <div>
                   <p style={{ fontWeight: 600, fontSize: 14 }}>{fotoLabel[id]}</p>
-                  <p style={{ fontSize: 12, color: fotos[id] ? '#27500A' : '#999' }}>{fotos[id] ? '✅ Foto cargada' : 'Toca para agregar'}</p>
+                  <p style={{ fontSize: 12, color: fotos[id] ? '#27500A' : '#999' }}>{fotos[id] ? '✅ Foto lista' : 'Toca para agregar'}</p>
                 </div>
               </div>
             ))}
+            <div className="card" style={{ background: '#FFF8E7', border: '1px solid #F5D77E' }}>
+              <p style={{ fontSize: 12, color: '#854F0B' }}>
+                ⚠️ Las fotos <strong>no se guardan en la app</strong>. Al finalizar el registro se abrirá WhatsApp y deberás enviarlas manualmente en el chat.
+              </p>
+            </div>
             {error && <div className="alert-error">{error}</div>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setError(''); setPaso(1) }}>← Volver</button>
@@ -211,7 +229,7 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
                 }
                 <div>
                   <p style={{ fontWeight: 600, fontSize: 14 }}>{fotoLabel[id]}</p>
-                  <p style={{ fontSize: 12, color: fotos[id] ? '#27500A' : '#999' }}>{fotos[id] ? '✅ Foto cargada' : 'Toca para agregar (opcional)'}</p>
+                  <p style={{ fontSize: 12, color: fotos[id] ? '#27500A' : '#999' }}>{fotos[id] ? '✅ Foto lista' : 'Toca para agregar (opcional)'}</p>
                 </div>
               </div>
             ))}
@@ -233,17 +251,22 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
             <div style={{ fontSize: 64 }}>🎉</div>
             <h2 style={{ color: '#4B1528', fontSize: 22 }}>¡Registro completado!</h2>
             <p style={{ color: '#666', lineHeight: 1.6 }}>
-              Tus datos fueron guardados. Ahora envía tu información al administrador por WhatsApp para completar el proceso.
+              Tus datos fueron guardados. Ahora envía tu información y fotos al administrador por WhatsApp.
             </p>
-            <div className="card" style={{ background: '#F0FDF4', border: '1px solid #86EFAC', width: '100%' }}>
-              <p style={{ fontSize: 13, color: '#166534', lineHeight: 1.6 }}>
-                📱 Al hacer clic en el botón se abrirá WhatsApp con todos tus datos listos para enviar. Luego <strong>envía también tus fotos</strong> en el mismo chat.
+            <div className="card" style={{ background: '#FFF8E7', border: '1px solid #F5D77E', width: '100%' }}>
+              <p style={{ fontSize: 13, color: '#854F0B', lineHeight: 1.6, textAlign: 'left' }}>
+                📱 Al tocar el botón se abrirá WhatsApp con tus datos. Luego <strong>envía tus fotos manualmente</strong> en ese mismo chat en este orden:<br /><br />
+                1️⃣ CI Anverso · 2️⃣ CI Reverso · 3️⃣ Selfie con CI · 4️⃣ Foto negocio
               </p>
             </div>
             <button
               className="btn-primary"
               style={{ width: '100%', background: '#25D366', fontSize: 16, padding: '14px' }}
               onClick={() => {
+                const fotosCapturadas = Object.entries(fotos)
+                  .filter(([, v]) => v !== null)
+                  .map(([k]) => ({ ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso', selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio', negInt: '🏬 Interior negocio' }[k]))
+                  .join(', ')
                 const msg =
 `🆕 *NUEVO REGISTRO - Pasanaku-IA*
 
@@ -257,7 +280,11 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
 📧 *Email:* ${form.email}
 ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación:* No proporcionada'}
 
-📎 Por favor envía también las fotos de CI y negocio en este chat.
+📸 *Fotos tomadas:* ${fotosCapturadas || 'Ninguna — envíalas manualmente'}
+
+⚠️ *Envía las fotos en los próximos mensajes:*
+1️⃣ CI Anverso · 2️⃣ CI Reverso · 3️⃣ Selfie con CI
+4️⃣ Foto exterior negocio · 5️⃣ Foto interior negocio
 
 ✅ Datos guardados en sistema Pasanaku-IA`
                 window.open(`https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank')
@@ -270,7 +297,6 @@ ${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación
             </p>
           </div>
         )}
-
       </div>
     </div>
   )
