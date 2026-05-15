@@ -9,16 +9,66 @@ export default function Registro({ onVolver }) {
   const [paso, setPaso] = useState(1)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
-  const [fotos, setFotos] = useState({})
+  const [fotos, setFotos] = useState({ ciFront: null, ciBack: null, selfie: null, negExt: null, negInt: null })
+  const [ubicacion, setUbicacion] = useState(null)
+  const [cargandoUbic, setCargandoUbic] = useState(false)
   const [form, setForm] = useState({
-    nombre: '', ci: '', fechaNac: '', celular: '',
-    domicilio: '', cuenta: '', negocio: '',
-    email: '', password: ''
+    nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '',
+    cuenta: '', negocio: '', email: '', password: ''
   })
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const marcarFoto = (id) => setFotos(f => ({ ...f, [id]: true }))
+  const capturarFoto = (id) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.capture = 'environment'
+    input.onchange = (e) => {
+      const file = e.target.files[0]
+      if (file) {
+        const url = URL.createObjectURL(file)
+        setFotos(f => ({ ...f, [id]: { file, url } }))
+      }
+    }
+    input.click()
+  }
+
+  const capturarUbicacion = () => {
+    setCargandoUbic(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        setUbicacion({ lat, lng, link: `https://maps.google.com/?q=${lat},${lng}` })
+        setCargandoUbic(false)
+      },
+      () => {
+        alert('No se pudo obtener la ubicación. Verifica los permisos.')
+        setCargandoUbic(false)
+      }
+    )
+  }
+
+  const validarPaso1 = () => {
+    if (!form.nombre || !form.ci || !form.fechaNac || !form.celular || !form.domicilio)
+      return 'Completa todos los campos del paso 1'
+    return ''
+  }
+
+  const validarPaso2 = () => {
+    if (!fotos.ciFront || !fotos.ciBack || !fotos.selfie)
+      return 'Sube las 3 fotos de identidad'
+    return ''
+  }
+
+  const validarPaso3 = () => {
+    if (!form.cuenta || !form.negocio || !form.email || !form.password)
+      return 'Completa todos los campos del paso 3'
+    if (form.password.length < 6)
+      return 'La contraseña debe tener al menos 6 caracteres'
+    return ''
+  }
 
   const handleRegistro = async () => {
     setCargando(true)
@@ -35,7 +85,9 @@ export default function Registro({ onVolver }) {
         cuenta: form.cuenta,
         negocio: form.negocio,
         email: form.email,
+        ubicacion: ubicacion || null,
         aprobado: false,
+        rechazado: false,
         turno: null,
         monto: null,
         fechaTransferencia: null,
@@ -44,155 +96,174 @@ export default function Registro({ onVolver }) {
       })
       setPaso(4)
     } catch (err) {
-      setError(err.code === 'auth/email-already-in-use' ? 'Este correo ya está registrado' : 'Error al registrar. Intenta de nuevo.')
+      if (err.code === 'auth/email-already-in-use') setError('Este correo ya está registrado.')
+      else if (err.code === 'auth/weak-password') setError('La contraseña es muy débil.')
+      else if (err.code === 'auth/invalid-email') setError('El correo no es válido.')
+      else setError('Ocurrió un error. Intenta de nuevo.')
     }
     setCargando(false)
   }
 
   const enviarWhatsApp = () => {
-    const msg = `🆕 *Nuevo registro - Pasanaku-IA*\n\n👤 *Nombre:* ${form.nombre}\n🪪 *CI:* ${form.ci}\n📅 *Fecha nac.:* ${form.fechaNac}\n📍 *Domicilio:* ${form.domicilio}\n📱 *Celular:* ${form.celular}\n🏪 *Negocio:* ${form.negocio}\n🏦 *Cuenta:* ${form.cuenta}\n📧 *Email:* ${form.email}\n\n📎 Documentos subidos en la app`
-    window.open(`https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(msg)}`)
+    const msg =
+`🆕 *NUEVO REGISTRO - Pasanaku-IA*
+
+👤 *Nombre:* ${form.nombre}
+🪪 *CI:* ${form.ci}
+📅 *Fecha nac.:* ${form.fechaNac}
+📱 *Celular:* ${form.celular}
+📍 *Domicilio:* ${form.domicilio}
+🏪 *Negocio:* ${form.negocio}
+🏦 *Cuenta:* ${form.cuenta}
+📧 *Email:* ${form.email}
+${ubicacion ? `\n📌 *Ubicación GPS:* ${ubicacion.link}` : '\n📌 *Ubicación:* No proporcionada'}
+
+📎 *Las fotos de CI, selfie y negocio se enviarán en los siguientes mensajes.*
+
+✅ Datos guardados en sistema Pasanaku-IA`
+
+    window.open(`https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
-  const steps = ['Datos', 'Identidad', 'Negocio', 'Listo']
+  const fotoLabel = { ciFront: '🪪 CI Anverso', ciBack: '🪪 CI Reverso', selfie: '🤳 Selfie con CI', negExt: '🏪 Negocio exterior', negInt: '🏬 Negocio interior' }
 
   return (
     <div className="page">
-      <div className="top-bar">
-        {paso < 4 && <button onClick={paso === 1 ? onVolver : () => setPaso(p => p-1)} style={{ background:'none', color:'#F4C0D1', fontSize:22, border:'none' }}>←</button>}
-        <h1>Registro Pasanaku</h1>
+      {/* HEADER */}
+      <div style={{ background: 'linear-gradient(160deg,#4B1528 0%,#2D0D18 100%)', padding: '24px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onVolver} style={{ background: 'none', border: 'none', color: '#F4C0D1', fontSize: 22, cursor: 'pointer' }}>←</button>
+        <div>
+          <h2 style={{ color: '#F4C0D1', fontSize: 18, fontWeight: 700 }}>Registro al Pasanaku</h2>
+          <p style={{ color: 'rgba(244,192,209,0.7)', fontSize: 12 }}>Paso {paso} de 4</p>
+        </div>
       </div>
 
-      {paso < 4 && (
-        <div style={{ display:'flex', padding:'12px 16px', gap:4, alignItems:'center' }}>
-          {steps.map((s, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'center', flex: i < steps.length-1 ? 1 : 0 }}>
-              <div style={{
-                width:28, height:28, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-                fontSize:12, fontWeight:700, flexShrink:0,
-                background: i+1 < paso ? '#EAF3DE' : i+1 === paso ? '#4B1528' : '#EEE',
-                color: i+1 < paso ? '#27500A' : i+1 === paso ? '#F4C0D1' : '#AAA'
-              }}>
-                {i+1 < paso ? '✓' : i+1}
-              </div>
-              {i < steps.length-1 && <div style={{ flex:1, height:2, background: i+1 < paso ? '#C0DD97' : '#EEE', margin:'0 4px' }} />}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* BARRA DE PROGRESO */}
+      <div style={{ display: 'flex', gap: 4, padding: '12px 20px', background: '#fff' }}>
+        {[1,2,3,4].map(n => (
+          <div key={n} style={{ flex: 1, height: 4, borderRadius: 2, background: paso >= n ? '#4B1528' : '#E5E5E5' }} />
+        ))}
+      </div>
 
       <div className="content">
+
+        {/* PASO 1 — DATOS PERSONALES */}
         {paso === 1 && (
-          <>
-            <div>
-              <div className="section-title">Datos personales</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="section-title">📋 Datos personales</div>
+            <input className="input" placeholder="Nombre completo *" value={form.nombre} onChange={e => set('nombre', e.target.value)} />
+            <input className="input" placeholder="Número de CI *" value={form.ci} onChange={e => set('ci', e.target.value)} />
+            <input className="input" type="date" placeholder="Fecha de nacimiento *" value={form.fechaNac} onChange={e => set('fechaNac', e.target.value)} />
+            <input className="input" placeholder="Celular (ej: 76710209) *" value={form.celular} onChange={e => set('celular', e.target.value)} />
+            <input className="input" placeholder="Domicilio *" value={form.domicilio} onChange={e => set('domicilio', e.target.value)} />
+
+            <div className="card" style={{ background: '#F5F5F5' }}>
+              <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>📌 Ubicación GPS (opcional pero recomendado)</p>
+              {ubicacion
+                ? <p style={{ fontSize: 12, color: '#27500A' }}>✅ Ubicación capturada correctamente</p>
+                : <button className="btn-secondary" onClick={capturarUbicacion} disabled={cargandoUbic}>
+                    {cargandoUbic ? 'Obteniendo ubicación...' : '📍 Capturar mi ubicación'}
+                  </button>
+              }
             </div>
-            {error && <div className="alert alert-error">{error}</div>}
-            <div className="card" style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              <div className="form-group"><label>Nombre completo</label><input value={form.nombre} onChange={e=>set('nombre',e.target.value)} placeholder="Juan Carlos Pérez" /></div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <div className="form-group"><label>N° de CI</label><input value={form.ci} onChange={e=>set('ci',e.target.value)} placeholder="7654321" /></div>
-                <div className="form-group"><label>Fecha de nac.</label><input type="date" value={form.fechaNac} onChange={e=>set('fechaNac',e.target.value)} /></div>
-              </div>
-              <div className="form-group"><label>Celular</label><input value={form.celular} onChange={e=>set('celular',e.target.value)} placeholder="+591 70012345" /></div>
-              <div className="form-group"><label>Domicilio</label><input value={form.domicilio} onChange={e=>set('domicilio',e.target.value)} placeholder="Av. Camacho #345, La Paz" /></div>
-              <div className="form-group"><label>N° de cuenta o QR de billetera</label><input value={form.cuenta} onChange={e=>set('cuenta',e.target.value)} placeholder="Banco Unión - 10045678" /></div>
-              <div className="form-group"><label>Correo electrónico</label><input type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="tucorreo@gmail.com" /></div>
-              <div className="form-group"><label>Contraseña (mín. 6 caracteres)</label><input type="password" value={form.password} onChange={e=>set('password',e.target.value)} placeholder="••••••••" /></div>
-            </div>
-            <button className="btn-primary" onClick={() => {
-              if (!form.nombre || !form.ci || !form.celular || !form.email || !form.password) { setError('Completa todos los campos'); return }
-              setError(''); setPaso(2)
-            }}>Continuar</button>
-          </>
+
+            {error && <div className="alert-error">{error}</div>}
+            <button className="btn-primary" onClick={() => { const e = validarPaso1(); if (e) { setError(e); return; } setError(''); setPaso(2) }}>
+              Siguiente →
+            </button>
+          </div>
         )}
 
+        {/* PASO 2 — FOTOS DE IDENTIDAD */}
         {paso === 2 && (
-          <>
-            <div><div className="section-title">Verificación de identidad</div></div>
-            <div className="card" style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              <p style={{ fontSize:13, color:'#6B6B6B' }}>Toca cada recuadro para subir la foto correspondiente</p>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <div className={`upload-box ${fotos['ci-front'] ? 'done' : ''}`} onClick={() => marcarFoto('ci-front')}>
-                  <div style={{ fontSize:28 }}>🪪</div>
-                  <div style={{ fontSize:12, marginTop:6, color: fotos['ci-front'] ? '#27500A' : '#6B6B6B', fontWeight: fotos['ci-front'] ? 700 : 400 }}>
-                    {fotos['ci-front'] ? 'CI anverso ✓' : 'CI anverso'}
-                  </div>
-                </div>
-                <div className={`upload-box ${fotos['ci-back'] ? 'done' : ''}`} onClick={() => marcarFoto('ci-back')}>
-                  <div style={{ fontSize:28 }}>🪪</div>
-                  <div style={{ fontSize:12, marginTop:6, color: fotos['ci-back'] ? '#27500A' : '#6B6B6B', fontWeight: fotos['ci-back'] ? 700 : 400 }}>
-                    {fotos['ci-back'] ? 'CI reverso ✓' : 'CI reverso'}
-                  </div>
-                </div>
-              </div>
-              <div className={`upload-box ${fotos['selfie'] ? 'done' : ''}`} onClick={() => marcarFoto('selfie')} style={{ padding:24 }}>
-                <div style={{ fontSize:32 }}>🤳</div>
-                <div style={{ fontSize:13, marginTop:8, color: fotos['selfie'] ? '#27500A' : '#6B6B6B', fontWeight: fotos['selfie'] ? 700 : 400 }}>
-                  {fotos['selfie'] ? 'Selfie con CI ✓' : 'Selfie sosteniendo tu CI'}
-                </div>
-                <div style={{ fontSize:11, color:'#AAA', marginTop:4 }}>Cara y CI deben ser visibles</div>
-              </div>
-              <div className="alert alert-info">Tus fotos son solo para verificación del administrador.</div>
-            </div>
-            <button className="btn-primary" onClick={() => setPaso(3)}>Continuar</button>
-          </>
-        )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="section-title">📸 Fotos de identidad</div>
+            <p style={{ fontSize: 13, color: '#666' }}>Sube las fotos desde tu galería o toma una foto ahora.</p>
 
-        {paso === 3 && (
-          <>
-            <div><div className="section-title">Datos del negocio</div></div>
-            <div className="card" style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              <div className="form-group"><label>Nombre del negocio</label><input value={form.negocio} onChange={e=>set('negocio',e.target.value)} placeholder="Tienda Don Juan" /></div>
-              <div style={{ background:'#E1F5EE', borderRadius:10, padding:16, textAlign:'center', border:'1px solid #9FE1CB' }}>
-                <div style={{ fontSize:28 }}>📍</div>
-                <div style={{ fontSize:13, color:'#0F6E56', fontWeight:600, marginTop:6 }}>Toca para capturar ubicación GPS</div>
-                <div style={{ fontSize:11, color:'#0F6E56', marginTop:3 }}>La app detectará tu ubicación automáticamente</div>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <div className={`upload-box ${fotos['neg-ext'] ? 'done' : ''}`} onClick={() => marcarFoto('neg-ext')}>
-                  <div style={{ fontSize:26 }}>🏪</div>
-                  <div style={{ fontSize:11, marginTop:6, color: fotos['neg-ext'] ? '#27500A' : '#6B6B6B' }}>
-                    {fotos['neg-ext'] ? 'Exterior ✓' : 'Foto exterior'}
-                  </div>
-                </div>
-                <div className={`upload-box ${fotos['neg-int'] ? 'done' : ''}`} onClick={() => marcarFoto('neg-int')}>
-                  <div style={{ fontSize:26 }}>🏬</div>
-                  <div style={{ fontSize:11, marginTop:6, color: fotos['neg-int'] ? '#27500A' : '#6B6B6B' }}>
-                    {fotos['neg-int'] ? 'Interior ✓' : 'Foto interior'}
-                  </div>
+            {['ciFront', 'ciBack', 'selfie'].map(id => (
+              <div key={id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} onClick={() => capturarFoto(id)}>
+                {fotos[id]
+                  ? <img src={fotos[id].url} alt={id} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+                  : <div style={{ width: 60, height: 60, background: '#F4C0D1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>📷</div>
+                }
+                <div>
+                  <p style={{ fontWeight: 600, fontSize: 14 }}>{fotoLabel[id]}</p>
+                  <p style={{ fontSize: 12, color: fotos[id] ? '#27500A' : '#999' }}>{fotos[id] ? '✅ Foto cargada' : 'Toca para agregar'}</p>
                 </div>
               </div>
-            </div>
-            {error && <div className="alert alert-error">{error}</div>}
-            <button className="btn-primary" disabled={cargando} onClick={() => {
-              if (!form.negocio) { setError('Ingresa el nombre del negocio'); return }
-              handleRegistro()
-            }}>
-              {cargando ? 'Registrando...' : 'Finalizar registro'}
-            </button>
-          </>
-        )}
+            ))}
 
-        {paso === 4 && (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, textAlign:'center', paddingTop:24 }}>
-            <div style={{ width:72, height:72, borderRadius:'50%', background:'#EAF3DE', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32 }}>✅</div>
-            <h2 style={{ color:'#4B1528', fontSize:22 }}>¡Registro completado!</h2>
-            <p style={{ color:'#6B6B6B', lineHeight:1.7, fontSize:14 }}>Tu solicitud fue enviada. Ahora envía tus datos al administrador por WhatsApp para que pueda revisarlos.</p>
-            <button className="btn-primary" style={{ background:'#25D366', marginTop:8 }} onClick={enviarWhatsApp}>
-              📲 Enviar datos por WhatsApp
-            </button>
-            <div className="card" style={{ width:'100%', textAlign:'left' }}>
-              <div className="section-title" style={{ marginBottom:10 }}>¿Qué sigue?</div>
-              <div style={{ fontSize:13, color:'#6B6B6B', lineHeight:2 }}>
-                1. El administrador revisará tus datos<br/>
-                2. Recibirás aprobación en persona<br/>
-                3. Se te asignará tu turno y monto<br/>
-                4. Podrás iniciar tus pagos diarios
-              </div>
+            {error && <div className="alert-error">{error}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setError(''); setPaso(1) }}>← Volver</button>
+              <button className="btn-primary" style={{ flex: 2 }} onClick={() => { const e = validarPaso2(); if (e) { setError(e); return; } setError(''); setPaso(3) }}>Siguiente →</button>
             </div>
           </div>
         )}
+
+        {/* PASO 3 — DATOS DEL NEGOCIO Y CUENTA */}
+        {paso === 3 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="section-title">🏪 Negocio y cuenta</div>
+            <input className="input" placeholder="Nombre del negocio *" value={form.negocio} onChange={e => set('negocio', e.target.value)} />
+            <input className="input" placeholder="Número de cuenta bancaria *" value={form.cuenta} onChange={e => set('cuenta', e.target.value)} />
+
+            {['negExt', 'negInt'].map(id => (
+              <div key={id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} onClick={() => capturarFoto(id)}>
+                {fotos[id]
+                  ? <img src={fotos[id].url} alt={id} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+                  : <div style={{ width: 60, height: 60, background: '#F4C0D1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>📷</div>
+                }
+                <div>
+                  <p style={{ fontWeight: 600, fontSize: 14 }}>{fotoLabel[id]}</p>
+                  <p style={{ fontSize: 12, color: fotos[id] ? '#27500A' : '#999' }}>{fotos[id] ? '✅ Foto cargada' : 'Toca para agregar (opcional)'}</p>
+                </div>
+              </div>
+            ))}
+
+            <div className="section-title" style={{ marginTop: 8 }}>🔐 Acceso a la app</div>
+            <input className="input" type="email" placeholder="Correo electrónico *" value={form.email} onChange={e => set('email', e.target.value)} />
+            <input className="input" type="password" placeholder="Contraseña (mín. 6 caracteres) *" value={form.password} onChange={e => set('password', e.target.value)} />
+
+            {error && <div className="alert-error">{error}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setError(''); setPaso(2) }}>← Volver</button>
+              <button className="btn-primary" style={{ flex: 2 }} onClick={async () => { const e = validarPaso3(); if (e) { setError(e); return; } await handleRegistro() }} disabled={cargando}>
+                {cargando ? 'Registrando...' : 'Finalizar registro ✓'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PASO 4 — ÉXITO + BOTÓN WHATSAPP */}
+        {paso === 4 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 64 }}>🎉</div>
+            <h2 style={{ color: '#4B1528', fontSize: 22 }}>¡Registro completado!</h2>
+            <p style={{ color: '#666', lineHeight: 1.6 }}>
+              Tus datos fueron guardados. Ahora envía tu información al administrador por WhatsApp para completar el proceso.
+            </p>
+
+            <div className="card" style={{ background: '#F0FDF4', border: '1px solid #86EFAC', width: '100%' }}>
+              <p style={{ fontSize: 13, color: '#166534', lineHeight: 1.6 }}>
+                📱 Al hacer clic en el botón se abrirá WhatsApp con todos tus datos listos para enviar. Luego <strong>envía también tus fotos de CI y negocio</strong> en el mismo chat.
+              </p>
+            </div>
+
+            <button
+              className="btn-primary"
+              style={{ width: '100%', background: '#25D366', fontSize: 16, padding: '14px' }}
+              onClick={enviarWhatsApp}
+            >
+              📲 Enviar datos por WhatsApp
+            </button>
+
+            <p style={{ fontSize: 12, color: '#999' }}>
+              El administrador revisará tu solicitud y te notificará cuando seas aprobado.
+            </p>
+          </div>
+        )}
+
       </div>
     </div>
   )
