@@ -3,7 +3,7 @@ import { auth, db } from '../firebase/config'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 
-const WHATSAPP_ADMIN = '59170012345'
+const WHATSAPP_ADMIN = '59176710209'
 
 export default function Registro({ onVolver }) {
   const [paso, setPaso] = useState(1)
