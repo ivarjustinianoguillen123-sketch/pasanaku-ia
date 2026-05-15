@@ -27,6 +27,13 @@ export default function DashboardAdmin() {
   const [filtro, setFiltro] = useState('aprobado')
   const [marcandoDia, setMarcandoDia] = useState(null)
 
+  // Edición de crédito existente
+  const [editandoCredito, setEditandoCredito] = useState(null) // creditoId
+  const [editCredito, setEditCredito] = useState({
+    montoPrestado: '', montoTotal: '', aporte: '', fechaInicio: ''
+  })
+  const [guardandoCredito, setGuardandoCredito] = useState(false)
+
   // Nuevo participante
   const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false)
   const [nuevoForm, setNuevoForm] = useState({
@@ -75,7 +82,9 @@ export default function DashboardAdmin() {
       setErrorEditar('Completa todos los campos'); return
     }
     setGuardandoEditar(true)
-    await updateDoc(doc(db, 'participantes', seleccionado.id), { nombre, ci, fechaNac, celular, domicilio, cuenta, negocio })
+    await updateDoc(doc(db, 'participantes', seleccionado.id), {
+      nombre, ci, fechaNac, celular, domicilio, cuenta, negocio
+    })
     const snap = await getDocs(collection(db, 'participantes'))
     const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     setParticipantes(todos)
@@ -85,12 +94,60 @@ export default function DashboardAdmin() {
     setGuardandoEditar(false)
   }
 
+  // ── ABRIR EDICIÓN DE CRÉDITO ──
+  const abrirEditarCredito = (credito) => {
+    setEditCredito({
+      montoPrestado: String(credito.montoPrestado || ''),
+      montoTotal:    String(credito.montoTotal || ''),
+      aporte:        String(credito.aporte || ''),
+      fechaInicio:   credito.fechaInicio || ''
+    })
+    setEditandoCredito(credito.id)
+  }
+
+  // ── GUARDAR EDICIÓN DE CRÉDITO ──
+  const guardarEditarCredito = async (participante, creditoId) => {
+    const { montoPrestado: mp, montoTotal: mt, aporte: ap, fechaInicio: fi } = editCredito
+    if (!mp || !mt || !ap || !fi) return
+    setGuardandoCredito(true)
+    const mpNum = parseFloat(mp)
+    const mtNum = parseFloat(mt)
+    const apNum = parseFloat(ap)
+    const totalDias = Math.round(mtNum / apNum)
+    const ganancia  = mtNum - mpNum
+
+    const creditos = (participante.creditos || []).map(c => {
+      if (c.id !== creditoId) return c
+      return {
+        ...c,
+        montoPrestado: mpNum,
+        montoTotal:    mtNum,
+        ganancia,
+        aporte:        apNum,
+        totalDias,
+        fechaInicio:   fi
+      }
+    })
+
+    await updateDoc(doc(db, 'participantes', participante.id), { creditos })
+    const snap = await getDocs(collection(db, 'participantes'))
+    const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    setParticipantes(todos)
+    const refrescado = todos.find(p => p.id === participante.id)
+    if (refrescado) setSeleccionado(refrescado)
+    setEditandoCredito(null)
+    setGuardandoCredito(false)
+  }
+
   const capturarFotoNuevo = (id) => {
     const input = document.createElement('input')
     input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment'
     input.onchange = (e) => {
       const file = e.target.files[0]
-      if (file) { const url = URL.createObjectURL(file); setNuevoFotos(f => ({ ...f, [id]: { file, url } })) }
+      if (file) {
+        const url = URL.createObjectURL(file)
+        setNuevoFotos(f => ({ ...f, [id]: { file, url } }))
+      }
     }
     input.click()
   }
@@ -105,13 +162,18 @@ export default function DashboardAdmin() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       await setDoc(firestoreDoc(db, 'participantes', cred.user.uid), {
-        uid: cred.user.uid, nombre, ci, fechaNac, celular, domicilio, cuenta, negocio, email,
-        ubicacion: null, aprobado: false, rechazado: false,
+        uid: cred.user.uid, nombre, ci, fechaNac, celular, domicilio,
+        cuenta, negocio, email, ubicacion: null,
+        aprobado: false, rechazado: false,
         turno: null, monto: null, fechaTransferencia: null, pagos: [],
         creadoEn: serverTimestamp()
       })
       const fotosCapturadas = Object.entries(nuevoFotos).filter(([, v]) => v !== null)
-        .map(([k]) => ({ ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso', selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio', negInt: '🏬 Interior negocio' }[k])).join(', ')
+        .map(([k]) => ({
+          ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso',
+          selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio',
+          negInt: '🏬 Interior negocio'
+        }[k])).join(', ')
       const msg =
 `🆕 *NUEVO REGISTRO (Admin) - Pasanaku-IA*
 
@@ -147,11 +209,11 @@ export default function DashboardAdmin() {
   const aprobar = async () => {
     if (!aporte || !monto || !montoPrestado || !fechaInicio) return
     setGuardando(true)
-    const aporteNum = parseFloat(aporte)
-    const montoNum = parseFloat(monto)
+    const aporteNum       = parseFloat(aporte)
+    const montoNum        = parseFloat(monto)
     const montoPrestadoNum = parseFloat(montoPrestado)
     const totalDias = Math.round(montoNum / aporteNum)
-    const ganancia = montoNum - montoPrestadoNum
+    const ganancia  = montoNum - montoPrestadoNum
     const credito = {
       id: Date.now(), numero: 1,
       montoPrestado: montoPrestadoNum,
@@ -166,21 +228,22 @@ export default function DashboardAdmin() {
       creditos: [credito]
     })
     await cargar()
-    setSeleccionado(null); setAporte(''); setMonto(''); setMontoPrestado(''); setFechaInicio('')
+    setSeleccionado(null)
+    setAporte(''); setMonto(''); setMontoPrestado(''); setFechaInicio('')
     setGuardando(false)
   }
 
   const agregarCredito = async (participante) => {
     const nuevoMontoPrestado = prompt('Monto real a prestar (Bs) — solo visible para admin:')
-    const nuevoMonto = prompt('Monto total a devolver (Bs):')
+    const nuevoMonto  = prompt('Monto total a devolver (Bs):')
     const nuevoAporte = prompt('Aporte diario (Bs):')
-    const nuevaFecha = prompt('Fecha de inicio (YYYY-MM-DD):')
+    const nuevaFecha  = prompt('Fecha de inicio (YYYY-MM-DD):')
     if (!nuevoMontoPrestado || !nuevoMonto || !nuevoAporte || !nuevaFecha) return
     const montoPrestadoNum = parseFloat(nuevoMontoPrestado)
-    const montoNum = parseFloat(nuevoMonto)
+    const montoNum  = parseFloat(nuevoMonto)
     const aporteNum = parseFloat(nuevoAporte)
     const totalDias = Math.round(montoNum / aporteNum)
-    const ganancia = montoNum - montoPrestadoNum
+    const ganancia  = montoNum - montoPrestadoNum
     const creditosActuales = participante.creditos || []
     const nuevoCredito = {
       id: Date.now(), numero: creditosActuales.length + 1,
@@ -188,7 +251,9 @@ export default function DashboardAdmin() {
       ganancia, aporte: aporteNum, totalDias,
       fechaInicio: nuevaFecha, pagos: [], completado: false, historial: null
     }
-    await updateDoc(doc(db, 'participantes', participante.id), { creditos: [...creditosActuales, nuevoCredito] })
+    await updateDoc(doc(db, 'participantes', participante.id), {
+      creditos: [...creditosActuales, nuevoCredito]
+    })
     const snap = await getDocs(collection(db, 'participantes'))
     const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     setParticipantes(todos)
@@ -201,7 +266,10 @@ export default function DashboardAdmin() {
     const creditos = (participante.creditos || []).map(c => {
       if (c.id !== creditoId) return c
       if ((c.pagos || []).find(p => p.dia === dia)) return c
-      const nuevosPagos = [...(c.pagos || []), { dia, monto: c.aporte, fecha: new Date().toISOString().split('T')[0] }]
+      const nuevosPagos = [
+        ...(c.pagos || []),
+        { dia, monto: c.aporte, fecha: new Date().toISOString().split('T')[0] }
+      ]
       return { ...c, pagos: nuevosPagos, completado: nuevosPagos.length >= c.totalDias }
     })
     await updateDoc(doc(db, 'participantes', participante.id), { creditos })
@@ -235,12 +303,12 @@ export default function DashboardAdmin() {
       return {
         ...c, completado: true,
         historial: {
-          fechaInicio: c.fechaInicio,
+          fechaInicio:   c.fechaInicio,
           fechaFin,
           montoPrestado: c.montoPrestado,
-          montoTotal: c.montoTotal,
-          ganancia: c.ganancia,
-          totalPagado: (c.pagos || []).reduce((s, p) => s + p.monto, 0)
+          montoTotal:    c.montoTotal,
+          ganancia:      c.ganancia,
+          totalPagado:   (c.pagos || []).reduce((s, p) => s + p.monto, 0)
         }
       }
     })
@@ -265,7 +333,6 @@ export default function DashboardAdmin() {
     filtro === 'pendiente' ? pendientes :
     participantes.filter(p => !p.rechazado)
 
-  // MÉTRICAS GLOBALES
   const totalRecaudado = aprobados.reduce((s, p) =>
     s + (p.creditos || []).reduce((sc, c) =>
       sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0), 0), 0)
@@ -274,7 +341,8 @@ export default function DashboardAdmin() {
     s + (p.creditos || []).reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
   const totalGanancias = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).filter(c => c.historial).reduce((sc, c) => sc + (c.ganancia || 0), 0), 0)
+    s + (p.creditos || []).filter(c => c.historial)
+      .reduce((sc, c) => sc + (c.ganancia || 0), 0), 0)
 
   const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
 
@@ -292,7 +360,7 @@ export default function DashboardAdmin() {
     negExt: '🏪 Negocio exterior', negInt: '🏬 Negocio interior'
   }
 
-  // ── EDITAR ──
+  // ── EDITAR DATOS PARTICIPANTE ──
   if (mostrarEditar && seleccionado) return (
     <div className="page">
       <div className="top-bar">
@@ -358,7 +426,8 @@ export default function DashboardAdmin() {
             <p style={{ fontSize: 12, color: '#854F0B' }}>⚠️ Las fotos se enviarán por WhatsApp. Puedes omitirlas ahora.</p>
           </div>
           {['ciFront', 'ciBack', 'selfie', 'negExt', 'negInt'].map(id => (
-            <div key={id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+            <div key={id} className="card"
+              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
               onClick={() => capturarFotoNuevo(id)}>
               {nuevoFotos[id]
                 ? <img src={nuevoFotos[id].url} alt={id} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 8 }} />
@@ -396,7 +465,7 @@ export default function DashboardAdmin() {
   if (seleccionado) return (
     <div className="page">
       <div className="top-bar">
-        <button onClick={() => setSeleccionado(null)}
+        <button onClick={() => { setSeleccionado(null); setEditandoCredito(null) }}
           style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
         <h1>Perfil participante</h1>
         <button onClick={() => abrirEditar(seleccionado)}
@@ -406,6 +475,7 @@ export default function DashboardAdmin() {
       </div>
       <div className="content">
 
+        {/* CABECERA */}
         <div style={{ background: '#4B1528', borderRadius: 14, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#F4C0D1', fontWeight: 700 }}>
             {seleccionado.nombre?.charAt(0)}
@@ -416,9 +486,16 @@ export default function DashboardAdmin() {
           </div>
         </div>
 
+        {/* DATOS */}
         <div className="card">
           <div className="section-title" style={{ marginBottom: 10 }}>Datos personales</div>
-          {[['CI', seleccionado.ci], ['Celular', seleccionado.celular], ['Domicilio', seleccionado.domicilio], ['Cuenta', seleccionado.cuenta], ['Fecha nac.', seleccionado.fechaNac]].map(([k, v]) => (
+          {[
+            ['CI', seleccionado.ci],
+            ['Celular', seleccionado.celular],
+            ['Domicilio', seleccionado.domicilio],
+            ['Cuenta', seleccionado.cuenta],
+            ['Fecha nac.', seleccionado.fechaNac]
+          ].map(([k, v]) => (
             <div key={k} className="info-row">
               <span className="info-key">{k}</span>
               <span className="info-val" style={{ fontSize: 12 }}>{v}</span>
@@ -427,11 +504,13 @@ export default function DashboardAdmin() {
           {seleccionado.ubicacion?.link && (
             <div className="info-row">
               <span className="info-key">Ubicación</span>
-              <a href={seleccionado.ubicacion.link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#4B1528' }}>📍 Ver en mapa</a>
+              <a href={seleccionado.ubicacion.link} target="_blank" rel="noreferrer"
+                style={{ fontSize: 12, color: '#4B1528' }}>📍 Ver en mapa</a>
             </div>
           )}
         </div>
 
+        {/* FORMULARIO APROBACIÓN INICIAL */}
         {!seleccionado.aprobado && !seleccionado.rechazado && (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">Aprobar crédito</div>
@@ -466,6 +545,7 @@ export default function DashboardAdmin() {
           </div>
         )}
 
+        {/* CRÉDITOS */}
         {seleccionado.aprobado && (
           <>
             {(seleccionado.creditos || []).map((credito) => {
@@ -473,39 +553,114 @@ export default function DashboardAdmin() {
               const diasPagados = (credito.pagos || []).length
               const pct = Math.min(100, Math.round(diasPagados / credito.totalDias * 100))
               const todosCompletos = diasPagados >= credito.totalDias
-              const yaArchivado = !!credito.historial
+              const yaArchivado   = !!credito.historial
+              const esteEnEdicion = editandoCredito === credito.id
 
               return (
                 <div key={credito.id} className="card"
                   style={{ border: `2px solid ${yaArchivado ? '#C0DD97' : todosCompletos ? '#F5D77E' : '#F4C0D1'}` }}>
+
+                  {/* CABECERA CRÉDITO */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div className="section-title" style={{ margin: 0 }}>Crédito #{credito.numero}</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-                      background: yaArchivado ? '#EAF3DE' : todosCompletos ? '#FFFBEB' : '#FDF5F7',
-                      color: yaArchivado ? '#27500A' : todosCompletos ? '#854F0B' : '#4B1528' }}>
-                      {yaArchivado ? '✅ Archivado' : todosCompletos ? '🎉 Listo para archivar' : '🔄 En curso'}
-                    </span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {/* BOTÓN EDITAR CRÉDITO — disponible siempre que no esté archivado */}
+                      {!yaArchivado && (
+                        <button
+                          onClick={() => esteEnEdicion ? setEditandoCredito(null) : abrirEditarCredito(credito)}
+                          style={{
+                            background: esteEnEdicion ? '#EEE' : '#FDF5F7',
+                            color: '#4B1528', border: '1px solid #F4C0D1',
+                            borderRadius: 16, padding: '3px 10px', fontSize: 11,
+                            fontWeight: 700, cursor: 'pointer'
+                          }}>
+                          {esteEnEdicion ? '✕ Cancelar' : '✏️ Editar'}
+                        </button>
+                      )}
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                        background: yaArchivado ? '#EAF3DE' : todosCompletos ? '#FFFBEB' : '#FDF5F7',
+                        color: yaArchivado ? '#27500A' : todosCompletos ? '#854F0B' : '#4B1528'
+                      }}>
+                        {yaArchivado ? '✅ Archivado' : todosCompletos ? '🎉 Listo para archivar' : '🔄 En curso'}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* DATOS ADMIN — incluye monto prestado y ganancia */}
-                  <div style={{ background: '#FDF5F7', borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, color: '#854F0B', fontWeight: 700, marginBottom: 4 }}>🔒 Solo visible para admin</div>
-                    {[
-                      ['💵 Prestado', `Bs ${credito.montoPrestado || '---'}`],
-                      ['💰 A devolver', `Bs ${credito.montoTotal}`],
-                      ['📈 Ganancia', `Bs ${credito.ganancia || (credito.montoTotal - (credito.montoPrestado || 0))}`],
-                    ].map(([k, v]) => (
-                      <div key={k} className="info-row" style={{ padding: '2px 0' }}>
-                        <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
-                        <span className="info-val" style={{ fontSize: 12, fontWeight: 700, color: '#4B1528' }}>{v}</span>
+                  {/* FORMULARIO DE EDICIÓN INLINE */}
+                  {esteEnEdicion && (
+                    <div style={{
+                      background: '#FFF8E7', border: '1.5px solid #F5D77E',
+                      borderRadius: 10, padding: 12, marginBottom: 12,
+                      display: 'flex', flexDirection: 'column', gap: 10
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#854F0B', marginBottom: 2 }}>
+                        ✏️ Editar datos del crédito
                       </div>
-                    ))}
-                  </div>
+                      <div className="form-group">
+                        <label style={{ fontSize: 12 }}>💵 Monto real prestado (Bs) — solo admin</label>
+                        <input type="number" value={editCredito.montoPrestado}
+                          onChange={e => setEditCredito(f => ({ ...f, montoPrestado: e.target.value }))}
+                          placeholder="500" />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontSize: 12 }}>💰 Monto total a devolver (Bs)</label>
+                        <input type="number" value={editCredito.montoTotal}
+                          onChange={e => setEditCredito(f => ({ ...f, montoTotal: e.target.value }))}
+                          placeholder="600" />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontSize: 12 }}>📅 Aporte diario (Bs)</label>
+                        <input type="number" value={editCredito.aporte}
+                          onChange={e => setEditCredito(f => ({ ...f, aporte: e.target.value }))}
+                          placeholder="25" />
+                      </div>
+                      {editCredito.montoPrestado && editCredito.montoTotal && editCredito.aporte && parseFloat(editCredito.aporte) > 0 && (
+                        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 8, fontSize: 12, color: '#166534' }}>
+                          💡 Prestado: <strong>Bs {editCredito.montoPrestado}</strong> · Devuelve: <strong>Bs {editCredito.montoTotal}</strong><br />
+                          📈 Ganancia: <strong>Bs {parseFloat(editCredito.montoTotal) - parseFloat(editCredito.montoPrestado)}</strong> ·{' '}
+                          📅 <strong>{Math.round(parseFloat(editCredito.montoTotal) / parseFloat(editCredito.aporte))} días</strong>
+                        </div>
+                      )}
+                      <div className="form-group">
+                        <label style={{ fontSize: 12 }}>🗓️ Fecha de inicio</label>
+                        <input type="date" value={editCredito.fechaInicio}
+                          onChange={e => setEditCredito(f => ({ ...f, fechaInicio: e.target.value }))} />
+                      </div>
+                      <button
+                        onClick={() => guardarEditarCredito(seleccionado, credito.id)}
+                        disabled={guardandoCredito}
+                        style={{
+                          background: '#4B1528', color: 'white', border: 'none',
+                          borderRadius: 10, padding: 11, fontSize: 13,
+                          fontWeight: 700, cursor: 'pointer', width: '100%'
+                        }}>
+                        {guardandoCredito ? 'Guardando...' : '💾 Guardar cambios del crédito'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* DATOS ADMIN */}
+                  {!esteEnEdicion && (
+                    <div style={{ background: '#FDF5F7', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: '#854F0B', fontWeight: 700, marginBottom: 4 }}>🔒 Solo visible para admin</div>
+                      {[
+                        ['💵 Prestado',  `Bs ${credito.montoPrestado || '---'}`],
+                        ['💰 A devolver', `Bs ${credito.montoTotal}`],
+                        ['📈 Ganancia',  `Bs ${credito.ganancia ?? (credito.montoTotal - (credito.montoPrestado || 0))}`],
+                      ].map(([k, v]) => (
+                        <div key={k} className="info-row" style={{ padding: '2px 0' }}>
+                          <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
+                          <span className="info-val" style={{ fontSize: 12, fontWeight: 700, color: '#4B1528' }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {[
                     ['Aporte diario', `Bs ${credito.aporte}/día`],
-                    ['Fecha inicio', credito.fechaInicio],
-                    ['Progreso', `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`],
+                    ['Fecha inicio',  credito.fechaInicio],
+                    ['Progreso',      `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`],
                   ].map(([k, v]) => (
                     <div key={k} className="info-row">
                       <span className="info-key">{k}</span>
@@ -513,15 +668,21 @@ export default function DashboardAdmin() {
                     </div>
                   ))}
 
+                  {/* BARRA DE PROGRESO */}
                   <div style={{ background: '#EEE', borderRadius: 20, height: 6, margin: '10px 0' }}>
-                    <div style={{ background: yaArchivado ? '#97C459' : todosCompletos ? '#EF9F27' : '#4B1528', width: `${pct}%`, height: '100%', borderRadius: 20, transition: 'width 0.3s' }} />
+                    <div style={{
+                      background: yaArchivado ? '#97C459' : todosCompletos ? '#EF9F27' : '#4B1528',
+                      width: `${pct}%`, height: '100%', borderRadius: 20, transition: 'width 0.3s'
+                    }} />
                   </div>
 
                   {/* GRILLA DE DÍAS */}
                   {!yaArchivado && (
                     <>
                       <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
-                        {todosCompletos ? '🎉 Todos los días pagados — archiva el crédito abajo' : 'Toca un día para marcarlo como pagado:'}
+                        {todosCompletos
+                          ? '🎉 Todos los días pagados — archiva el crédito abajo'
+                          : 'Toca un día para marcarlo como pagado:'}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
                         {Array.from({ length: credito.totalDias }, (_, i) => i + 1).map(d => {
@@ -532,7 +693,9 @@ export default function DashboardAdmin() {
                             <div key={d}
                               onClick={() => !cargandoEste && !pagado && marcarPago(seleccionado, credito.id, d)}
                               onContextMenu={(e) => { e.preventDefault(); if (pagado) desmarcarPago(seleccionado, credito.id, d) }}
-                              title={pagado ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}` : `${etiquetaFecha} — toca para marcar`}
+                              title={pagado
+                                ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}`
+                                : `${etiquetaFecha} — toca para marcar`}
                               style={{
                                 borderRadius: 6, padding: '4px 2px', textAlign: 'center',
                                 fontSize: 9, fontWeight: 700, lineHeight: 1.4,
@@ -543,8 +706,12 @@ export default function DashboardAdmin() {
                                 userSelect: 'none'
                               }}>
                               <div style={{ fontSize: 10, fontWeight: 800 }}>D{d}</div>
-                              <div style={{ fontSize: 8, color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#AAA' }}>{etiquetaFecha}</div>
-                              <div style={{ fontSize: 9 }}>{cargandoEste ? '...' : pagado ? `✓${pagado.monto}` : '---'}</div>
+                              <div style={{ fontSize: 8, color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#AAA' }}>
+                                {etiquetaFecha}
+                              </div>
+                              <div style={{ fontSize: 9 }}>
+                                {cargandoEste ? '...' : pagado ? `✓${pagado.monto}` : '---'}
+                              </div>
                             </div>
                           )
                         })}
@@ -552,25 +719,29 @@ export default function DashboardAdmin() {
                     </>
                   )}
 
-                  {/* BOTÓN ARCHIVAR — solo cuando todos los días están pagados y no archivado */}
+                  {/* BOTÓN ARCHIVAR */}
                   {todosCompletos && !yaArchivado && (
                     <button
                       onClick={() => registrarCreditoCompletado(seleccionado, credito.id)}
-                      style={{ width: '100%', marginTop: 12, background: '#27500A', color: 'white', border: 'none', borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                      style={{
+                        width: '100%', marginTop: 12, background: '#27500A',
+                        color: 'white', border: 'none', borderRadius: 12,
+                        padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer'
+                      }}>
                       🏆 Registrar crédito completado
                     </button>
                   )}
 
-                  {/* HISTORIAL DEL CRÉDITO ARCHIVADO */}
+                  {/* HISTORIAL ARCHIVADO */}
                   {yaArchivado && credito.historial && (
                     <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 10, marginTop: 8 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#27500A', marginBottom: 6 }}>📋 Registro del crédito</div>
                       {[
-                        ['Inicio', credito.historial.fechaInicio],
-                        ['Finalización', credito.historial.fechaFin],
+                        ['Inicio',           credito.historial.fechaInicio],
+                        ['Finalización',     credito.historial.fechaFin],
                         ['Capital prestado', `Bs ${credito.historial.montoPrestado}`],
-                        ['Total recibido', `Bs ${credito.historial.totalPagado}`],
-                        ['Ganancia', `Bs ${credito.historial.ganancia}`],
+                        ['Total recibido',   `Bs ${credito.historial.totalPagado}`],
+                        ['Ganancia',         `Bs ${credito.historial.ganancia}`],
                       ].map(([k, v]) => (
                         <div key={k} className="info-row" style={{ padding: '2px 0' }}>
                           <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
@@ -589,7 +760,9 @@ export default function DashboardAdmin() {
           </>
         )}
 
-        <button style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, width: '100%' }}
+        {/* WHATSAPP */}
+        <button
+          style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, width: '100%' }}
           onClick={() => window.open(WHATSAPP(seleccionado.celular,
 `Hola ${seleccionado.nombre}, te contactamos del *Pasanaku-IA*. 🌟
 
@@ -621,13 +794,12 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
             <div style={{ fontSize: 28, fontWeight: 700, color: '#F4C0D1' }}>Bs {totalRecaudado.toLocaleString()}</div>
           </div>
 
-          {/* MÉTRICAS PRINCIPALES */}
           <div className="metric-grid">
             {[
-              ['Aprobados', aprobados.length, '#27500A'],
-              ['Pagaron hoy', `${pagosHoy}/${aprobados.length}`, undefined],
-              ['Pendientes', pendientes.length, '#854F0B'],
-              ['Recaudado', `Bs ${totalRecaudado}`, '#27500A'],
+              ['Aprobados',  aprobados.length,                          '#27500A'],
+              ['Pagaron hoy', `${pagosHoy}/${aprobados.length}`,        undefined],
+              ['Pendientes', pendientes.length,                          '#854F0B'],
+              ['Recaudado',  `Bs ${totalRecaudado}`,                    '#27500A'],
             ].map(([label, val, color]) => (
               <div key={label} className="metric-card">
                 <div className="metric-label">{label}</div>
@@ -636,15 +808,14 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
             ))}
           </div>
 
-          {/* MÉTRICAS FINANCIERAS */}
           <div className="card" style={{ background: '#1A0A10', border: '1px solid #4B1528' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#F4C0D1', marginBottom: 10 }}>📊 Resumen financiero</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {[
-                ['💵 Capital entregado', `Bs ${totalCapital.toLocaleString()}`, '#F4C0D1'],
-                ['📈 Ganancias cobradas', `Bs ${totalGanancias.toLocaleString()}`, '#C0DD97'],
-                ['📋 Créditos entregados', creditosEntregados, '#F4C0D1'],
-                ['✅ Créditos concluidos', creditosConcluidos, '#C0DD97'],
+                ['💵 Capital entregado',    `Bs ${totalCapital.toLocaleString()}`,   '#F4C0D1'],
+                ['📈 Ganancias cobradas',   `Bs ${totalGanancias.toLocaleString()}`, '#C0DD97'],
+                ['📋 Créditos entregados',  creditosEntregados,                      '#F4C0D1'],
+                ['✅ Créditos concluidos',  creditosConcluidos,                      '#C0DD97'],
               ].map(([label, val, color]) => (
                 <div key={label} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: 10 }}>
                   <div style={{ fontSize: 10, color: 'rgba(244,192,209,0.6)', marginBottom: 4 }}>{label}</div>
@@ -656,7 +827,9 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
 
           {pendientes.length > 0 && (
             <div className="card" style={{ border: '2px solid #FAEEDA' }}>
-              <div className="section-title" style={{ color: '#854F0B', marginBottom: 10 }}>⚠️ Solicitudes pendientes ({pendientes.length})</div>
+              <div className="section-title" style={{ color: '#854F0B', marginBottom: 10 }}>
+                ⚠️ Solicitudes pendientes ({pendientes.length})
+              </div>
               {pendientes.slice(0, 3).map(p => (
                 <div key={p.id} className="row" onClick={() => setSeleccionado(p)} style={{ cursor: 'pointer' }}>
                   <div className="avatar av-amber">{p.nombre?.charAt(0)}</div>
@@ -678,7 +851,11 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
               <div style={{ background: '#E24B4A', flex: Math.max(0.1, pendientes.length) }} />
             </div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              {[['#97C459','Al día', aprobados.length], ['#EF9F27','1 día sin pagar', 0], ['#E24B4A','2+ días sin pagar', 0]].map(([c, l, n]) => (
+              {[
+                ['#97C459', 'Al día',          aprobados.length],
+                ['#EF9F27', '1 día sin pagar', 0],
+                ['#E24B4A', '2+ días sin pagar', 0]
+              ].map(([c, l, n]) => (
                 <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6B6B6B' }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: c }} />{l} ({n})
                 </div>
@@ -737,7 +914,9 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.7)' }}>Total recaudado</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#F4C0D1', marginTop: 4 }}>Bs {totalRecaudado.toLocaleString()}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#F4C0D1', marginTop: 4 }}>
+                  Bs {totalRecaudado.toLocaleString()}
+                </div>
               </div>
               <div style={{ fontSize: 36 }}>📊</div>
             </div>
@@ -747,10 +926,10 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
             {aprobados.length === 0
               ? <p style={{ fontSize: 13, color: '#AAA', textAlign: 'center', padding: 20 }}>Sin participantes aprobados aún</p>
               : aprobados.map(p => {
-                  const totalP = (p.creditos || []).reduce((s, c) => s + (c.pagos || []).reduce((sc, pg) => sc + pg.monto, 0), 0)
-                  const totalDias = (p.creditos || []).reduce((s, c) => s + c.totalDias, 0)
+                  const totalP     = (p.creditos || []).reduce((s, c) => s + (c.pagos || []).reduce((sc, pg) => sc + pg.monto, 0), 0)
+                  const totalDias  = (p.creditos || []).reduce((s, c) => s + c.totalDias, 0)
                   const diasPagados = (p.creditos || []).reduce((s, c) => s + (c.pagos || []).length, 0)
-                  const pct = totalDias > 0 ? Math.min(100, Math.round(diasPagados / totalDias * 100)) : 0
+                  const pct        = totalDias > 0 ? Math.min(100, Math.round(diasPagados / totalDias * 100)) : 0
                   return (
                     <div key={p.id} className="row" onClick={() => setSeleccionado(p)} style={{ cursor: 'pointer' }}>
                       <div className="avatar av-green">{p.nombre?.charAt(0)}</div>
