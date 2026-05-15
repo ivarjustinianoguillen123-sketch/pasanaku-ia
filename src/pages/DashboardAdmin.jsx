@@ -7,6 +7,13 @@ import { doc as firestoreDoc, setDoc, serverTimestamp } from 'firebase/firestore
 const WHATSAPP = (cel, msg) => `https://wa.me/591${cel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`
 const WHATSAPP_ADMIN = '59176710209'
 
+const fechaDia = (fechaInicio, dia) => {
+  if (!fechaInicio) return ''
+  const d = new Date(fechaInicio + 'T12:00:00')
+  d.setDate(d.getDate() + dia - 1)
+  return d.toLocaleDateString('es-BO', { day: 'numeric', month: 'short' })
+}
+
 export default function DashboardAdmin() {
   const [tab, setTab] = useState('panel')
   const [participantes, setParticipantes] = useState([])
@@ -14,12 +21,13 @@ export default function DashboardAdmin() {
   const [seleccionado, setSeleccionado] = useState(null)
   const [aporte, setAporte] = useState('')
   const [monto, setMonto] = useState('')
+  const [montoPrestado, setMontoPrestado] = useState('')
   const [fechaInicio, setFechaInicio] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [filtro, setFiltro] = useState('aprobado')
   const [marcandoDia, setMarcandoDia] = useState(null)
 
-  // Estado para nuevo participante
+  // Nuevo participante
   const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false)
   const [nuevoForm, setNuevoForm] = useState({
     nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '',
@@ -31,6 +39,14 @@ export default function DashboardAdmin() {
   const [guardandoNuevo, setGuardandoNuevo] = useState(false)
   const [errorNuevo, setErrorNuevo] = useState('')
 
+  // Editar participante
+  const [mostrarEditar, setMostrarEditar] = useState(false)
+  const [editForm, setEditForm] = useState({
+    nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '', cuenta: '', negocio: ''
+  })
+  const [guardandoEditar, setGuardandoEditar] = useState(false)
+  const [errorEditar, setErrorEditar] = useState('')
+
   useEffect(() => { cargar() }, [])
 
   const cargar = async () => {
@@ -41,18 +57,40 @@ export default function DashboardAdmin() {
   }
 
   const setNuevo = (k, v) => setNuevoForm(f => ({ ...f, [k]: v }))
+  const setEdit  = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
+
+  const abrirEditar = (p) => {
+    setEditForm({
+      nombre: p.nombre || '', ci: p.ci || '', fechaNac: p.fechaNac || '',
+      celular: p.celular || '', domicilio: p.domicilio || '',
+      cuenta: p.cuenta || '', negocio: p.negocio || ''
+    })
+    setErrorEditar('')
+    setMostrarEditar(true)
+  }
+
+  const guardarEdicion = async () => {
+    const { nombre, ci, fechaNac, celular, domicilio, cuenta, negocio } = editForm
+    if (!nombre || !ci || !fechaNac || !celular || !domicilio || !cuenta || !negocio) {
+      setErrorEditar('Completa todos los campos'); return
+    }
+    setGuardandoEditar(true)
+    await updateDoc(doc(db, 'participantes', seleccionado.id), { nombre, ci, fechaNac, celular, domicilio, cuenta, negocio })
+    const snap = await getDocs(collection(db, 'participantes'))
+    const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    setParticipantes(todos)
+    const refrescado = todos.find(p => p.id === seleccionado.id)
+    if (refrescado) setSeleccionado(refrescado)
+    setMostrarEditar(false)
+    setGuardandoEditar(false)
+  }
 
   const capturarFotoNuevo = (id) => {
     const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.capture = 'environment'
+    input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment'
     input.onchange = (e) => {
       const file = e.target.files[0]
-      if (file) {
-        const url = URL.createObjectURL(file)
-        setNuevoFotos(f => ({ ...f, [id]: { file, url } }))
-      }
+      if (file) { const url = URL.createObjectURL(file); setNuevoFotos(f => ({ ...f, [id]: { file, url } })) }
     }
     input.click()
   }
@@ -60,38 +98,20 @@ export default function DashboardAdmin() {
   const registrarNuevoParticipante = async () => {
     const { nombre, ci, fechaNac, celular, domicilio, cuenta, negocio, email, password } = nuevoForm
     if (!nombre || !ci || !fechaNac || !celular || !domicilio || !cuenta || !negocio || !email || !password) {
-      setErrorNuevo('Completa todos los campos obligatorios')
-      return
+      setErrorNuevo('Completa todos los campos obligatorios'); return
     }
-    if (password.length < 6) {
-      setErrorNuevo('La contraseña debe tener al menos 6 caracteres')
-      return
-    }
-    setGuardandoNuevo(true)
-    setErrorNuevo('')
+    if (password.length < 6) { setErrorNuevo('La contraseña debe tener al menos 6 caracteres'); return }
+    setGuardandoNuevo(true); setErrorNuevo('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       await setDoc(firestoreDoc(db, 'participantes', cred.user.uid), {
-        uid: cred.user.uid,
-        nombre, ci, fechaNac, celular, domicilio, cuenta, negocio, email,
-        ubicacion: null,
-        aprobado: false,
-        rechazado: false,
-        turno: null,
-        monto: null,
-        fechaTransferencia: null,
-        pagos: [],
+        uid: cred.user.uid, nombre, ci, fechaNac, celular, domicilio, cuenta, negocio, email,
+        ubicacion: null, aprobado: false, rechazado: false,
+        turno: null, monto: null, fechaTransferencia: null, pagos: [],
         creadoEn: serverTimestamp()
       })
-
-      const fotosCapturadas = Object.entries(nuevoFotos)
-        .filter(([, v]) => v !== null)
-        .map(([k]) => ({
-          ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso',
-          selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio', negInt: '🏬 Interior negocio'
-        }[k]))
-        .join(', ')
-
+      const fotosCapturadas = Object.entries(nuevoFotos).filter(([, v]) => v !== null)
+        .map(([k]) => ({ ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso', selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio', negInt: '🏬 Interior negocio' }[k])).join(', ')
       const msg =
 `🆕 *NUEVO REGISTRO (Admin) - Pasanaku-IA*
 
@@ -111,15 +131,11 @@ export default function DashboardAdmin() {
 4️⃣ Foto exterior negocio · 5️⃣ Foto interior negocio
 
 ✅ Registrado desde panel administrador`
-
       window.open(`https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank')
-
-      // Resetear formulario
       setNuevoForm({ nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '', cuenta: '', negocio: '', email: '', password: '' })
       setNuevoFotos({ ciFront: null, ciBack: null, selfie: null, negExt: null, negInt: null })
       setMostrarFormNuevo(false)
       await cargar()
-
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') setErrorNuevo('Este correo ya está registrado.')
       else if (err.code === 'auth/invalid-email') setErrorNuevo('El correo no es válido.')
@@ -129,60 +145,50 @@ export default function DashboardAdmin() {
   }
 
   const aprobar = async () => {
-    if (!aporte || !monto || !fechaInicio) return
+    if (!aporte || !monto || !montoPrestado || !fechaInicio) return
     setGuardando(true)
     const aporteNum = parseFloat(aporte)
     const montoNum = parseFloat(monto)
+    const montoPrestadoNum = parseFloat(montoPrestado)
     const totalDias = Math.round(montoNum / aporteNum)
+    const ganancia = montoNum - montoPrestadoNum
     const credito = {
-      id: Date.now(),
-      numero: 1,
+      id: Date.now(), numero: 1,
+      montoPrestado: montoPrestadoNum,
       montoTotal: montoNum,
-      aporte: aporteNum,
-      totalDias,
-      fechaInicio,
-      pagos: [],
-      completado: false
+      ganancia,
+      aporte: aporteNum, totalDias, fechaInicio,
+      pagos: [], completado: false, historial: null
     }
     await updateDoc(doc(db, 'participantes', seleccionado.id), {
-      aprobado: true,
-      rechazado: false,
-      bienvenidaVista: false,
-      aporte: aporteNum,
-      monto: montoNum,
-      totalDias,
-      fechaInicio,
+      aprobado: true, rechazado: false, bienvenidaVista: false,
+      aporte: aporteNum, monto: montoNum, totalDias, fechaInicio,
       creditos: [credito]
     })
     await cargar()
-    setSeleccionado(null)
-    setAporte('')
-    setMonto('')
-    setFechaInicio('')
+    setSeleccionado(null); setAporte(''); setMonto(''); setMontoPrestado(''); setFechaInicio('')
     setGuardando(false)
   }
 
   const agregarCredito = async (participante) => {
-    const nuevoAporte = prompt('Aporte diario para el nuevo crédito (Bs):')
+    const nuevoMontoPrestado = prompt('Monto real a prestar (Bs) — solo visible para admin:')
     const nuevoMonto = prompt('Monto total a devolver (Bs):')
-    const nuevaFecha = prompt('Fecha de inicio del nuevo crédito (YYYY-MM-DD):')
-    if (!nuevoAporte || !nuevoMonto || !nuevaFecha) return
-    const aporteNum = parseFloat(nuevoAporte)
+    const nuevoAporte = prompt('Aporte diario (Bs):')
+    const nuevaFecha = prompt('Fecha de inicio (YYYY-MM-DD):')
+    if (!nuevoMontoPrestado || !nuevoMonto || !nuevoAporte || !nuevaFecha) return
+    const montoPrestadoNum = parseFloat(nuevoMontoPrestado)
     const montoNum = parseFloat(nuevoMonto)
+    const aporteNum = parseFloat(nuevoAporte)
     const totalDias = Math.round(montoNum / aporteNum)
+    const ganancia = montoNum - montoPrestadoNum
     const creditosActuales = participante.creditos || []
     const nuevoCredito = {
-      id: Date.now(),
-      numero: creditosActuales.length + 1,
-      montoTotal: montoNum,
-      aporte: aporteNum,
-      totalDias,
-      fechaInicio: nuevaFecha,
-      pagos: [],
-      completado: false
+      id: Date.now(), numero: creditosActuales.length + 1,
+      montoPrestado: montoPrestadoNum, montoTotal: montoNum,
+      ganancia, aporte: aporteNum, totalDias,
+      fechaInicio: nuevaFecha, pagos: [], completado: false, historial: null
     }
-    const creditosNuevos = [...creditosActuales, nuevoCredito]
-    await updateDoc(doc(db, 'participantes', participante.id), { creditos: creditosNuevos })
+    await updateDoc(doc(db, 'participantes', participante.id), { creditos: [...creditosActuales, nuevoCredito] })
     const snap = await getDocs(collection(db, 'participantes'))
     const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     setParticipantes(todos)
@@ -194,13 +200,9 @@ export default function DashboardAdmin() {
     setMarcandoDia(`${creditoId}-${dia}`)
     const creditos = (participante.creditos || []).map(c => {
       if (c.id !== creditoId) return c
-      const yaPagado = (c.pagos || []).find(p => p.dia === dia)
-      if (yaPagado) return c
-      const nuevosPagos = [...(c.pagos || []), {
-        dia, monto: c.aporte, fecha: new Date().toISOString().split('T')[0]
-      }]
-      const completado = nuevosPagos.length >= c.totalDias
-      return { ...c, pagos: nuevosPagos, completado }
+      if ((c.pagos || []).find(p => p.dia === dia)) return c
+      const nuevosPagos = [...(c.pagos || []), { dia, monto: c.aporte, fecha: new Date().toISOString().split('T')[0] }]
+      return { ...c, pagos: nuevosPagos, completado: nuevosPagos.length >= c.totalDias }
     })
     await updateDoc(doc(db, 'participantes', participante.id), { creditos })
     const snap = await getDocs(collection(db, 'participantes'))
@@ -215,8 +217,32 @@ export default function DashboardAdmin() {
     if (!window.confirm(`¿Desmarcar el pago del Día ${dia}?`)) return
     const creditos = (participante.creditos || []).map(c => {
       if (c.id !== creditoId) return c
-      const nuevosPagos = (c.pagos || []).filter(p => p.dia !== dia)
-      return { ...c, pagos: nuevosPagos, completado: false }
+      return { ...c, pagos: (c.pagos || []).filter(p => p.dia !== dia), completado: false }
+    })
+    await updateDoc(doc(db, 'participantes', participante.id), { creditos })
+    const snap = await getDocs(collection(db, 'participantes'))
+    const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    setParticipantes(todos)
+    const refrescado = todos.find(p => p.id === participante.id)
+    if (refrescado) setSeleccionado(refrescado)
+  }
+
+  const registrarCreditoCompletado = async (participante, creditoId) => {
+    if (!window.confirm('¿Registrar este crédito como completado y archivarlo?')) return
+    const creditos = (participante.creditos || []).map(c => {
+      if (c.id !== creditoId) return c
+      const fechaFin = new Date().toISOString().split('T')[0]
+      return {
+        ...c, completado: true,
+        historial: {
+          fechaInicio: c.fechaInicio,
+          fechaFin,
+          montoPrestado: c.montoPrestado,
+          montoTotal: c.montoTotal,
+          ganancia: c.ganancia,
+          totalPagado: (c.pagos || []).reduce((s, p) => s + p.monto, 0)
+        }
+      }
     })
     await updateDoc(doc(db, 'participantes', participante.id), { creditos })
     const snap = await getDocs(collection(db, 'participantes'))
@@ -229,21 +255,31 @@ export default function DashboardAdmin() {
   const rechazar = async () => {
     if (!window.confirm('¿Rechazar esta solicitud?')) return
     await updateDoc(doc(db, 'participantes', seleccionado.id), { rechazado: true })
-    await cargar()
-    setSeleccionado(null)
+    await cargar(); setSeleccionado(null)
   }
 
   const pendientes = participantes.filter(p => !p.aprobado && !p.rechazado)
   const aprobados  = participantes.filter(p => p.aprobado && !p.rechazado)
-
   const lista =
     filtro === 'aprobado'  ? aprobados :
     filtro === 'pendiente' ? pendientes :
     participantes.filter(p => !p.rechazado)
 
+  // MÉTRICAS GLOBALES
   const totalRecaudado = aprobados.reduce((s, p) =>
     s + (p.creditos || []).reduce((sc, c) =>
       sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0), 0), 0)
+
+  const totalCapital = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
+
+  const totalGanancias = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).filter(c => c.historial).reduce((sc, c) => sc + (c.ganancia || 0), 0), 0)
+
+  const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
+
+  const creditosConcluidos = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).filter(c => c.historial).length, 0)
 
   const pagosHoy = aprobados.filter(p =>
     (p.creditos || []).some(c =>
@@ -256,7 +292,44 @@ export default function DashboardAdmin() {
     negExt: '🏪 Negocio exterior', negInt: '🏬 Negocio interior'
   }
 
-  // ── FORMULARIO NUEVO PARTICIPANTE ──
+  // ── EDITAR ──
+  if (mostrarEditar && seleccionado) return (
+    <div className="page">
+      <div className="top-bar">
+        <button onClick={() => { setMostrarEditar(false); setErrorEditar('') }}
+          style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
+        <h1>Editar participante</h1>
+        <div style={{ width: 40 }} />
+      </div>
+      <div className="content">
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="section-title">📋 Datos personales</div>
+          <input className="input" placeholder="Nombre completo *" value={editForm.nombre} onChange={e => setEdit('nombre', e.target.value)} />
+          <input className="input" placeholder="Número de CI *" value={editForm.ci} onChange={e => setEdit('ci', e.target.value)} />
+          <input className="input" type="date" value={editForm.fechaNac} onChange={e => setEdit('fechaNac', e.target.value)} />
+          <input className="input" placeholder="Celular *" value={editForm.celular} onChange={e => setEdit('celular', e.target.value)} />
+          <input className="input" placeholder="Domicilio *" value={editForm.domicilio} onChange={e => setEdit('domicilio', e.target.value)} />
+        </div>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="section-title">🏪 Negocio y cuenta</div>
+          <input className="input" placeholder="Nombre del negocio *" value={editForm.negocio} onChange={e => setEdit('negocio', e.target.value)} />
+          <input className="input" placeholder="Número de cuenta bancaria *" value={editForm.cuenta} onChange={e => setEdit('cuenta', e.target.value)} />
+        </div>
+        <div className="card" style={{ background: '#F0F4FF', border: '1px solid #C7D7FF', padding: 10 }}>
+          <p style={{ fontSize: 12, color: '#3451A0' }}>ℹ️ El correo y contraseña no se pueden editar por seguridad.</p>
+        </div>
+        {errorEditar && <div className="alert-error">{errorEditar}</div>}
+        <button className="btn-primary" onClick={guardarEdicion} disabled={guardandoEditar}
+          style={{ width: '100%', fontSize: 15, padding: 14 }}>
+          {guardandoEditar ? 'Guardando...' : '💾 Guardar cambios'}
+        </button>
+        <button className="btn-secondary" onClick={() => { setMostrarEditar(false); setErrorEditar('') }}
+          style={{ width: '100%' }}>Cancelar</button>
+      </div>
+    </div>
+  )
+
+  // ── NUEVO PARTICIPANTE ──
   if (mostrarFormNuevo) return (
     <div className="page">
       <div className="top-bar">
@@ -266,7 +339,6 @@ export default function DashboardAdmin() {
         <div style={{ width: 40 }} />
       </div>
       <div className="content">
-
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="section-title">📋 Datos personales</div>
           <input className="input" placeholder="Nombre completo *" value={nuevoForm.nombre} onChange={e => setNuevo('nombre', e.target.value)} />
@@ -275,27 +347,22 @@ export default function DashboardAdmin() {
           <input className="input" placeholder="Celular (ej: 76710209) *" value={nuevoForm.celular} onChange={e => setNuevo('celular', e.target.value)} />
           <input className="input" placeholder="Domicilio *" value={nuevoForm.domicilio} onChange={e => setNuevo('domicilio', e.target.value)} />
         </div>
-
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="section-title">🏪 Negocio y cuenta</div>
           <input className="input" placeholder="Nombre del negocio *" value={nuevoForm.negocio} onChange={e => setNuevo('negocio', e.target.value)} />
           <input className="input" placeholder="Número de cuenta bancaria *" value={nuevoForm.cuenta} onChange={e => setNuevo('cuenta', e.target.value)} />
         </div>
-
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="section-title">📸 Fotos <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(opcional)</span></div>
           <div className="card" style={{ background: '#FFF8E7', border: '1px solid #F5D77E', padding: 10 }}>
-            <p style={{ fontSize: 12, color: '#854F0B' }}>
-              ⚠️ Las fotos se enviarán por WhatsApp. Si no las tienes ahora puedes omitirlas.
-            </p>
+            <p style={{ fontSize: 12, color: '#854F0B' }}>⚠️ Las fotos se enviarán por WhatsApp. Puedes omitirlas ahora.</p>
           </div>
           {['ciFront', 'ciBack', 'selfie', 'negExt', 'negInt'].map(id => (
             <div key={id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
               onClick={() => capturarFotoNuevo(id)}>
               {nuevoFotos[id]
                 ? <img src={nuevoFotos[id].url} alt={id} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 8 }} />
-                : <div style={{ width: 50, height: 50, background: '#F4C0D1', borderRadius: 8,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📷</div>
+                : <div style={{ width: 50, height: 50, background: '#F4C0D1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📷</div>
               }
               <div>
                 <p style={{ fontWeight: 600, fontSize: 13 }}>{fotoLabelNuevo[id]}</p>
@@ -306,29 +373,21 @@ export default function DashboardAdmin() {
             </div>
           ))}
         </div>
-
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="section-title">🔐 Acceso a la app</div>
           <input className="input" type="email" placeholder="Correo electrónico *" value={nuevoForm.email} onChange={e => setNuevo('email', e.target.value)} />
           <input className="input" type="password" placeholder="Contraseña (mín. 6 caracteres) *" value={nuevoForm.password} onChange={e => setNuevo('password', e.target.value)} />
           <div className="card" style={{ background: '#F0F4FF', border: '1px solid #C7D7FF', padding: 10 }}>
-            <p style={{ fontSize: 12, color: '#3451A0' }}>
-              💡 Guarda estas credenciales para dárselas al participante. No podrás verlas después.
-            </p>
+            <p style={{ fontSize: 12, color: '#3451A0' }}>💡 Guarda estas credenciales para dárselas al participante.</p>
           </div>
         </div>
-
         {errorNuevo && <div className="alert-error">{errorNuevo}</div>}
-
         <button className="btn-primary" onClick={registrarNuevoParticipante} disabled={guardandoNuevo}
           style={{ width: '100%', fontSize: 15, padding: 14 }}>
           {guardandoNuevo ? 'Registrando...' : '✅ Registrar participante'}
         </button>
         <button className="btn-secondary" onClick={() => { setMostrarFormNuevo(false); setErrorNuevo('') }}
-          style={{ width: '100%' }}>
-          Cancelar
-        </button>
-
+          style={{ width: '100%' }}>Cancelar</button>
       </div>
     </div>
   )
@@ -340,34 +399,26 @@ export default function DashboardAdmin() {
         <button onClick={() => setSeleccionado(null)}
           style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
         <h1>Perfil participante</h1>
-        <div style={{ width: 40 }} />
+        <button onClick={() => abrirEditar(seleccionado)}
+          style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
+          ✏️ Editar
+        </button>
       </div>
       <div className="content">
 
-        <div style={{ background: '#4B1528', borderRadius: 14, padding: 16,
-          display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: 20, color: '#F4C0D1', fontWeight: 700 }}>
+        <div style={{ background: '#4B1528', borderRadius: 14, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#F4C0D1', fontWeight: 700 }}>
             {seleccionado.nombre?.charAt(0)}
           </div>
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#F4C0D1' }}>{seleccionado.nombre}</div>
-            <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.75)', marginTop: 2 }}>
-              {seleccionado.negocio} · {seleccionado.email}
-            </div>
+            <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.75)', marginTop: 2 }}>{seleccionado.negocio} · {seleccionado.email}</div>
           </div>
         </div>
 
         <div className="card">
           <div className="section-title" style={{ marginBottom: 10 }}>Datos personales</div>
-          {[
-            ['CI', seleccionado.ci],
-            ['Celular', seleccionado.celular],
-            ['Domicilio', seleccionado.domicilio],
-            ['Cuenta', seleccionado.cuenta],
-            ['Fecha nac.', seleccionado.fechaNac],
-          ].map(([k, v]) => (
+          {[['CI', seleccionado.ci], ['Celular', seleccionado.celular], ['Domicilio', seleccionado.domicilio], ['Cuenta', seleccionado.cuenta], ['Fecha nac.', seleccionado.fechaNac]].map(([k, v]) => (
             <div key={k} className="info-row">
               <span className="info-key">{k}</span>
               <span className="info-val" style={{ fontSize: 12 }}>{v}</span>
@@ -376,8 +427,7 @@ export default function DashboardAdmin() {
           {seleccionado.ubicacion?.link && (
             <div className="info-row">
               <span className="info-key">Ubicación</span>
-              <a href={seleccionado.ubicacion.link} target="_blank" rel="noreferrer"
-                style={{ fontSize: 12, color: '#4B1528' }}>📍 Ver en mapa</a>
+              <a href={seleccionado.ubicacion.link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#4B1528' }}>📍 Ver en mapa</a>
             </div>
           )}
         </div>
@@ -386,31 +436,31 @@ export default function DashboardAdmin() {
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">Aprobar crédito</div>
             <div className="form-group">
-              <label>Monto total a devolver (Bs)</label>
+              <label>💵 Monto real a prestar (Bs) — solo visible para admin</label>
+              <input type="number" placeholder="500" value={montoPrestado} onChange={e => setMontoPrestado(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>💰 Monto total a devolver (Bs)</label>
               <input type="number" placeholder="600" value={monto} onChange={e => setMonto(e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Aporte diario (Bs)</label>
+              <label>📅 Aporte diario (Bs)</label>
               <input type="number" placeholder="25" value={aporte} onChange={e => setAporte(e.target.value)} />
             </div>
-            {aporte && monto && parseFloat(aporte) > 0 && (
-              <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC',
-                borderRadius: 8, padding: 10, fontSize: 13, color: '#166534' }}>
-                💡 Bs {aporte}/día × <strong>{Math.round(parseFloat(monto) / parseFloat(aporte))} días</strong> = Total Bs {monto}
+            {montoPrestado && monto && aporte && parseFloat(aporte) > 0 && (
+              <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 10, fontSize: 13, color: '#166534' }}>
+                💡 Préstamo: <strong>Bs {montoPrestado}</strong> · Devuelve: <strong>Bs {monto}</strong> · Ganancia: <strong>Bs {parseFloat(monto) - parseFloat(montoPrestado)}</strong><br />
+                📅 Bs {aporte}/día × <strong>{Math.round(parseFloat(monto) / parseFloat(aporte))} días</strong>
               </div>
             )}
             <div className="form-group">
-              <label>Fecha de inicio de pagos</label>
+              <label>🗓️ Fecha de inicio de pagos</label>
               <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} />
             </div>
-            <button className="btn-primary" style={{ background: '#27500A' }}
-              disabled={guardando} onClick={aprobar}>
+            <button className="btn-primary" style={{ background: '#27500A' }} disabled={guardando} onClick={aprobar}>
               {guardando ? 'Aprobando...' : '✅ Aprobar participante'}
             </button>
-            <button style={{ background: 'none', color: '#791F1F',
-              border: '1.5px solid #F09595', borderRadius: 12,
-              padding: 12, fontSize: 14, fontWeight: 700 }}
-              onClick={rechazar}>
+            <button style={{ background: 'none', color: '#791F1F', border: '1.5px solid #F09595', borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 700 }} onClick={rechazar}>
               Rechazar solicitud
             </button>
           </div>
@@ -422,89 +472,132 @@ export default function DashboardAdmin() {
               const totalPagado = (credito.pagos || []).reduce((s, p) => s + p.monto, 0)
               const diasPagados = (credito.pagos || []).length
               const pct = Math.min(100, Math.round(diasPagados / credito.totalDias * 100))
+              const todosCompletos = diasPagados >= credito.totalDias
+              const yaArchivado = !!credito.historial
+
               return (
                 <div key={credito.id} className="card"
-                  style={{ border: `2px solid ${credito.completado ? '#C0DD97' : '#F4C0D1'}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', marginBottom: 10 }}>
+                  style={{ border: `2px solid ${yaArchivado ? '#C0DD97' : todosCompletos ? '#F5D77E' : '#F4C0D1'}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div className="section-title" style={{ margin: 0 }}>Crédito #{credito.numero}</div>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-                      background: credito.completado ? '#EAF3DE' : '#FDF5F7',
-                      color: credito.completado ? '#27500A' : '#4B1528' }}>
-                      {credito.completado ? '✅ Completado' : '🔄 En curso'}
+                      background: yaArchivado ? '#EAF3DE' : todosCompletos ? '#FFFBEB' : '#FDF5F7',
+                      color: yaArchivado ? '#27500A' : todosCompletos ? '#854F0B' : '#4B1528' }}>
+                      {yaArchivado ? '✅ Archivado' : todosCompletos ? '🎉 Listo para archivar' : '🔄 En curso'}
                     </span>
                   </div>
+
+                  {/* DATOS ADMIN — incluye monto prestado y ganancia */}
+                  <div style={{ background: '#FDF5F7', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: '#854F0B', fontWeight: 700, marginBottom: 4 }}>🔒 Solo visible para admin</div>
+                    {[
+                      ['💵 Prestado', `Bs ${credito.montoPrestado || '---'}`],
+                      ['💰 A devolver', `Bs ${credito.montoTotal}`],
+                      ['📈 Ganancia', `Bs ${credito.ganancia || (credito.montoTotal - (credito.montoPrestado || 0))}`],
+                    ].map(([k, v]) => (
+                      <div key={k} className="info-row" style={{ padding: '2px 0' }}>
+                        <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
+                        <span className="info-val" style={{ fontSize: 12, fontWeight: 700, color: '#4B1528' }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+
                   {[
-                    ['Monto total', `Bs ${credito.montoTotal}`],
                     ['Aporte diario', `Bs ${credito.aporte}/día`],
                     ['Fecha inicio', credito.fechaInicio],
                     ['Progreso', `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`],
                   ].map(([k, v]) => (
                     <div key={k} className="info-row">
                       <span className="info-key">{k}</span>
-                      <span className="info-val" style={{
-                        color: k === 'Monto total' ? '#4B1528' : undefined,
-                        fontWeight: k === 'Monto total' ? 700 : undefined }}>{v}</span>
+                      <span className="info-val">{v}</span>
                     </div>
                   ))}
+
                   <div style={{ background: '#EEE', borderRadius: 20, height: 6, margin: '10px 0' }}>
-                    <div style={{ background: credito.completado ? '#97C459' : '#4B1528',
-                      width: `${pct}%`, height: '100%', borderRadius: 20, transition: 'width 0.3s' }} />
+                    <div style={{ background: yaArchivado ? '#97C459' : todosCompletos ? '#EF9F27' : '#4B1528', width: `${pct}%`, height: '100%', borderRadius: 20, transition: 'width 0.3s' }} />
                   </div>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
-                    {credito.completado ? '🎉 Todos los pagos completados'
-                      : 'Toca un día para marcarlo como pagado:'}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
-                    {Array.from({ length: credito.totalDias }, (_, i) => i + 1).map(d => {
-                      const pagado = (credito.pagos || []).find(p => p.dia === d)
-                      const cargandoEste = marcandoDia === `${credito.id}-${d}`
-                      return (
-                        <div key={d}
-                          onClick={() => !cargandoEste && !pagado && marcarPago(seleccionado, credito.id, d)}
-                          onContextMenu={(e) => { e.preventDefault(); if (pagado) desmarcarPago(seleccionado, credito.id, d) }}
-                          title={pagado ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}` : 'Pendiente'}
-                          style={{
-                            borderRadius: 6, padding: '5px 2px', textAlign: 'center',
-                            fontSize: 10, fontWeight: 700,
-                            background: cargandoEste ? '#FFF3CD' : pagado ? '#EAF3DE' : '#F0EFED',
-                            color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#BBB',
-                            cursor: pagado ? 'default' : 'pointer',
-                            border: pagado ? '1px solid #C0DD97' : '1px solid #EEE',
-                            userSelect: 'none'
-                          }}>
-                          D{d}<br />
-                          <span style={{ fontSize: 9 }}>
-                            {cargandoEste ? '...' : pagado ? `✓${pagado.monto}` : '---'}
-                          </span>
+
+                  {/* GRILLA DE DÍAS */}
+                  {!yaArchivado && (
+                    <>
+                      <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
+                        {todosCompletos ? '🎉 Todos los días pagados — archiva el crédito abajo' : 'Toca un día para marcarlo como pagado:'}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
+                        {Array.from({ length: credito.totalDias }, (_, i) => i + 1).map(d => {
+                          const pagado = (credito.pagos || []).find(p => p.dia === d)
+                          const cargandoEste = marcandoDia === `${credito.id}-${d}`
+                          const etiquetaFecha = fechaDia(credito.fechaInicio, d)
+                          return (
+                            <div key={d}
+                              onClick={() => !cargandoEste && !pagado && marcarPago(seleccionado, credito.id, d)}
+                              onContextMenu={(e) => { e.preventDefault(); if (pagado) desmarcarPago(seleccionado, credito.id, d) }}
+                              title={pagado ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}` : `${etiquetaFecha} — toca para marcar`}
+                              style={{
+                                borderRadius: 6, padding: '4px 2px', textAlign: 'center',
+                                fontSize: 9, fontWeight: 700, lineHeight: 1.4,
+                                background: cargandoEste ? '#FFF3CD' : pagado ? '#EAF3DE' : '#F0EFED',
+                                color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#BBB',
+                                cursor: pagado ? 'default' : 'pointer',
+                                border: pagado ? '1px solid #C0DD97' : '1px solid #EEE',
+                                userSelect: 'none'
+                              }}>
+                              <div style={{ fontSize: 10, fontWeight: 800 }}>D{d}</div>
+                              <div style={{ fontSize: 8, color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#AAA' }}>{etiquetaFecha}</div>
+                              <div style={{ fontSize: 9 }}>{cargandoEste ? '...' : pagado ? `✓${pagado.monto}` : '---'}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {/* BOTÓN ARCHIVAR — solo cuando todos los días están pagados y no archivado */}
+                  {todosCompletos && !yaArchivado && (
+                    <button
+                      onClick={() => registrarCreditoCompletado(seleccionado, credito.id)}
+                      style={{ width: '100%', marginTop: 12, background: '#27500A', color: 'white', border: 'none', borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                      🏆 Registrar crédito completado
+                    </button>
+                  )}
+
+                  {/* HISTORIAL DEL CRÉDITO ARCHIVADO */}
+                  {yaArchivado && credito.historial && (
+                    <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#27500A', marginBottom: 6 }}>📋 Registro del crédito</div>
+                      {[
+                        ['Inicio', credito.historial.fechaInicio],
+                        ['Finalización', credito.historial.fechaFin],
+                        ['Capital prestado', `Bs ${credito.historial.montoPrestado}`],
+                        ['Total recibido', `Bs ${credito.historial.totalPagado}`],
+                        ['Ganancia', `Bs ${credito.historial.ganancia}`],
+                      ].map(([k, v]) => (
+                        <div key={k} className="info-row" style={{ padding: '2px 0' }}>
+                          <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
+                          <span className="info-val" style={{ fontSize: 12, fontWeight: 700 }}>{v}</span>
                         </div>
-                      )
-                    })}
-                  </div>
-                  {credito.completado && (
-                    <div style={{ textAlign: 'center', padding: '10px 0',
-                      fontSize: 13, color: '#27500A', fontWeight: 600 }}>
-                      🎉 Crédito completado · Total recibido: Bs {totalPagado}
+                      ))}
                     </div>
                   )}
                 </div>
               )
             })}
-            <button className="btn-secondary" onClick={() => agregarCredito(seleccionado)}
-              style={{ width: '100%' }}>
+
+            <button className="btn-secondary" onClick={() => agregarCredito(seleccionado)} style={{ width: '100%' }}>
               ➕ Agregar nuevo crédito
             </button>
           </>
         )}
 
-        <button style={{ background: '#25D366', color: 'white', border: 'none',
-          borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, width: '100%' }}
-          onClick={() => window.open(
-            WHATSAPP(seleccionado.celular, `Hola ${seleccionado.nombre}, te contactamos del Pasanaku-IA.`), '_blank'
-          )}>
+        <button style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, width: '100%' }}
+          onClick={() => window.open(WHATSAPP(seleccionado.celular,
+`Hola ${seleccionado.nombre}, te contactamos del *Pasanaku-IA*. 🌟
+
+⚠️ Te recordamos que hoy no hemos recibido tu comprobante de pago.
+
+Por favor, no olvides enviarnos el comprobante para registrar que se realizó el pago. ¡Muchas gracias! 🙏`), '_blank')}>
           📲 Contactar por WhatsApp
         </button>
-
       </div>
     </div>
   )
@@ -516,8 +609,7 @@ export default function DashboardAdmin() {
         <span style={{ fontSize: 22 }}>💰</span>
         <h1>{tab === 'panel' ? 'Panel Admin' : tab === 'participantes' ? 'Participantes' : 'Balance'}</h1>
         <button onClick={() => auth.signOut()}
-          style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1',
-            border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
+          style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
           Salir
         </button>
       </div>
@@ -528,6 +620,8 @@ export default function DashboardAdmin() {
             <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Total recaudado</div>
             <div style={{ fontSize: 28, fontWeight: 700, color: '#F4C0D1' }}>Bs {totalRecaudado.toLocaleString()}</div>
           </div>
+
+          {/* MÉTRICAS PRINCIPALES */}
           <div className="metric-grid">
             {[
               ['Aprobados', aprobados.length, '#27500A'],
@@ -541,11 +635,28 @@ export default function DashboardAdmin() {
               </div>
             ))}
           </div>
+
+          {/* MÉTRICAS FINANCIERAS */}
+          <div className="card" style={{ background: '#1A0A10', border: '1px solid #4B1528' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#F4C0D1', marginBottom: 10 }}>📊 Resumen financiero</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                ['💵 Capital entregado', `Bs ${totalCapital.toLocaleString()}`, '#F4C0D1'],
+                ['📈 Ganancias cobradas', `Bs ${totalGanancias.toLocaleString()}`, '#C0DD97'],
+                ['📋 Créditos entregados', creditosEntregados, '#F4C0D1'],
+                ['✅ Créditos concluidos', creditosConcluidos, '#C0DD97'],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: 10, color: 'rgba(244,192,209,0.6)', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color }}>{val}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {pendientes.length > 0 && (
             <div className="card" style={{ border: '2px solid #FAEEDA' }}>
-              <div className="section-title" style={{ color: '#854F0B', marginBottom: 10 }}>
-                ⚠️ Solicitudes pendientes ({pendientes.length})
-              </div>
+              <div className="section-title" style={{ color: '#854F0B', marginBottom: 10 }}>⚠️ Solicitudes pendientes ({pendientes.length})</div>
               {pendientes.slice(0, 3).map(p => (
                 <div key={p.id} className="row" onClick={() => setSeleccionado(p)} style={{ cursor: 'pointer' }}>
                   <div className="avatar av-amber">{p.nombre?.charAt(0)}</div>
@@ -558,6 +669,7 @@ export default function DashboardAdmin() {
               ))}
             </div>
           )}
+
           <div className="card">
             <div className="section-title" style={{ marginBottom: 10 }}>Semáforo de riesgo</div>
             <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', height: 10, marginBottom: 8 }}>
@@ -578,13 +690,10 @@ export default function DashboardAdmin() {
 
       {tab === 'participantes' && (
         <div className="content">
-          {/* BOTÓN NUEVO PARTICIPANTE */}
-          <button className="btn-primary"
-            onClick={() => setMostrarFormNuevo(true)}
+          <button className="btn-primary" onClick={() => setMostrarFormNuevo(true)}
             style={{ width: '100%', fontSize: 15, padding: 14, marginBottom: 4 }}>
             ➕ Nuevo participante
           </button>
-
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
             {[['aprobado','Aprobados'], ['pendiente','Pendientes'], ['todos','Todos']].map(([id, label]) => (
               <button key={id} onClick={() => setFiltro(id)} style={{
@@ -595,7 +704,6 @@ export default function DashboardAdmin() {
               }}>{label}</button>
             ))}
           </div>
-
           {cargando ? <div className="spinner" /> : (
             <div className="card">
               {lista.length === 0
@@ -629,9 +737,7 @@ export default function DashboardAdmin() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.7)' }}>Total recaudado</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#F4C0D1', marginTop: 4 }}>
-                  Bs {totalRecaudado.toLocaleString()}
-                </div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#F4C0D1', marginTop: 4 }}>Bs {totalRecaudado.toLocaleString()}</div>
               </div>
               <div style={{ fontSize: 36 }}>📊</div>
             </div>
