@@ -346,51 +346,40 @@ export default function DashboardAdmin() {
   const aprobados = participantes.filter(p => p.aprobado && !p.rechazado)
   const lista = filtro === 'aprobado' ? aprobados : filtro === 'pendiente' ? pendientes : participantes.filter(p => !p.rechazado)
 
-  // ✅ FÓRMULAS CORREGIDAS SEGÚN TU LÓGICA CORRECTA
-  
-  // Total cobrado = suma de todos los pagos realizados
+  // ✅ FÓRMULAS CORREGIDAS - BALANCE CORRECTO
   const totalCobrado = aprobados.reduce((s, p) =>
     s + (p.creditos || []).reduce((sc, c) =>
       sc + (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0), 0), 0)
 
-  // Total prestado = suma de todos los montoPrestado de créditos activos (no archivados)
   const totalPrestado = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
-      .filter(c => !c.historial) // Solo créditos activos
+      .filter(c => !c.historial)
       .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
-  // Capital en la calle = dinero pendiente por cobrar en créditos activos
   const capitalEnCalle = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
-      .filter(c => !c.historial) // Solo créditos activos
+      .filter(c => !c.historial)
       .reduce((sc, c) => {
         const cobradoCredito = (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0)
         const pendiente = (c.montoPrestado || 0) - cobradoCredito
         return sc + Math.max(0, pendiente)
       }, 0), 0)
 
-  // Dinero en mano = Capital inicial + Total cobrado - Total prestado activo
-  const dineroEnMano = CAPITAL_INICIAL + totalCobrado - totalPrestado
+  // ✅ FÓRMULA CORRECTA - SIN SUMAR CAPITAL INICIAL DE NUEVO
+  const dineroEnMano = totalCobrado - totalPrestado
 
-  // Total de ganancias de créditos completados (archivados)
   const totalGanancias = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
       .filter(c => c.historial)
       .reduce((sc, c) => sc + (c.historial?.ganancia || 0), 0), 0)
 
-  // Capital invertido en créditos activos con fuente "capital_nuevo"
   const totalCapitalNuevoActivo = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
       .filter(c => !c.historial && c.fuente === 'capital_nuevo')
       .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
-  // Total de créditos entregados
   const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
-  
-  // Total de créditos concluidos (archivados)
   const creditosConcluidos = aprobados.reduce((s, p) => s + (p.creditos || []).filter(c => c.historial).length, 0)
-  
-  // Participantes con pagos registrados hoy
   const pagosHoy = aprobados.filter(p =>
     (p.creditos || []).some(c =>
       (c.pagos || []).some(pg => pg.fecha === new Date().toISOString().split('T')[0]))).length
@@ -754,7 +743,6 @@ export default function DashboardAdmin() {
                   </div>
                 </div>
 
-                {/* ✅ BALANCE EN CAJA - FÓRMULA CORRECTA */}
                 <div className="card" style={{ background: '#2D0D18', border: '1px solid #4B1528', color: '#F4C0D1' }}>
                   <div className="section-title" style={{ color: '#F4C0D1', marginBottom: 12 }}>💰 BALANCE TOTAL EN CAJA</div>
 
@@ -888,3 +876,5 @@ export default function DashboardAdmin() {
     </div>
   )
 }
+
+export default DashboardAdmin
