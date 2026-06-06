@@ -15,6 +15,7 @@ export default function App() {
   const [perfil, setPerfil] = useState(null)
   const [pantalla, setPantalla] = useState('login')
   const [cargando, setCargando] = useState(true)
+  const [historialPantallas, setHistorialPantallas] = useState(['login'])
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -22,32 +23,58 @@ export default function App() {
         setUser(u)
         if (u.email === ADMIN_EMAIL) {
           setPerfil({ rol: 'admin' })
-          setPantalla('admin')
+          cambiarPantalla('admin')
         } else {
           const snap = await getDoc(doc(db, 'participantes', u.uid))
           if (snap.exists()) {
             const data = snap.data()
             setPerfil(data)
             if (!data.aprobado) {
-              setPantalla('pendiente')
+              cambiarPantalla('pendiente')
             } else if (!data.bienvenidaVista) {
-              setPantalla('bienvenida')
+              cambiarPantalla('bienvenida')
             } else {
-              setPantalla('participante')
+              cambiarPantalla('participante')
             }
           } else {
-            setPantalla('registro')
+            cambiarPantalla('registro')
           }
         }
       } else {
         setUser(null)
         setPerfil(null)
-        setPantalla('login')
+        cambiarPantalla('login')
       }
       setCargando(false)
     })
     return unsub
   }, [])
+
+  const cambiarPantalla = (nuevaPantalla) => {
+    setPantalla(nuevaPantalla)
+    setHistorialPantallas(prev => [...prev, nuevaPantalla])
+  }
+
+  const retroceder = () => {
+    setHistorialPantallas(prev => {
+      if (prev.length > 1) {
+        const nuevoHistorial = prev.slice(0, -1)
+        setPantalla(nuevoHistorial[nuevoHistorial.length - 1])
+        return nuevoHistorial
+      }
+      return prev
+    })
+  }
+
+  useEffect(() => {
+    const handlePopState = (e) => {
+      e.preventDefault()
+      retroceder()
+    }
+    
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [historialPantallas])
 
   if (cargando) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', flexDirection:'column', gap:16 }}>
@@ -57,8 +84,8 @@ export default function App() {
     </div>
   )
 
-  if (pantalla === 'login') return <Login onRegistro={() => setPantalla('registro')} />
-  if (pantalla === 'registro') return <Registro onVolver={() => setPantalla('login')} />
+  if (pantalla === 'login') return <Login onRegistro={() => cambiarPantalla('registro')} />
+  if (pantalla === 'registro') return <Registro onVolver={() => retroceder()} />
   if (pantalla === 'pendiente') return (
     <div className="page" style={{ alignItems:'center', justifyContent:'center', padding:32, textAlign:'center', gap:16 }}>
       <div style={{ fontSize:48 }}>⏳</div>
@@ -67,7 +94,7 @@ export default function App() {
       <button className="btn-secondary" style={{ marginTop:8 }} onClick={() => { auth.signOut() }}>Cerrar sesión</button>
     </div>
   )
-  if (pantalla === 'bienvenida') return <Bienvenida perfil={perfil} onContinuar={() => setPantalla('participante')} />
+  if (pantalla === 'bienvenida') return <Bienvenida perfil={perfil} onContinuar={() => cambiarPantalla('participante')} />
   if (pantalla === 'participante') return <DashboardParticipante user={user} perfil={perfil} />
   if (pantalla === 'admin') return <DashboardAdmin user={user} />
   return null
