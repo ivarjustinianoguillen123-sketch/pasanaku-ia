@@ -6,6 +6,7 @@ import { doc as firestoreDoc, setDoc, serverTimestamp } from 'firebase/firestore
 
 const WHATSAPP = (cel, msg) => `https://wa.me/591${cel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`
 const WHATSAPP_ADMIN = '59176710209'
+const CAPITAL_INICIAL = 1000
 
 const fechaDia = (fechaInicio, dia) => {
   if (!fechaInicio) return ''
@@ -181,35 +182,10 @@ export default function DashboardAdmin() {
           negInt: '🏪 Interior negocio'
         }[k]))
         .join(', ')
-      const msg = `*NUEVO REGISTRO (Admin) - Pasanaku-IA*
-
-*Nombre:* ${nombre}
-*CI:* ${ci}
-*Fecha nac.:* ${fechaNac}
-*Celular:* ${celular}
-*Domicilio:* ${domicilio}
-*Negocio:* ${negocio}
-*Cuenta:* ${cuenta}
-*Email:* ${email}
-
-*Fotos:* ${fotosCapturadas || 'No se tomaron fotos - solicitarlas al participante'}
-
-*Envía las fotos pendientes en este chat si las tienes:*
-1️⃣ CI Anverso
-2️⃣ CI Reverso
-3️⃣ Selfie con CI
-4️⃣ Foto exterior negocio
-5️⃣ Foto interior negocio
-
-Registrado desde panel administrador`
+      const msg = `*NUEVO REGISTRO (Admin) - Pasanaku-IA*\n\n*Nombre:* ${nombre}\n*CI:* ${ci}\n*Fecha nac.:* ${fechaNac}\n*Celular:* ${celular}\n*Domicilio:* ${domicilio}\n*Negocio:* ${negocio}\n*Cuenta:* ${cuenta}\n*Email:* ${email}\n\n*Fotos:* ${fotosCapturadas || 'No se tomaron fotos - solicitarlas al participante'}\n\n*Envía las fotos pendientes en este chat si las tienes:*\n1️⃣ CI Anverso\n2️⃣ CI Reverso\n3️⃣ Selfie con CI\n4️⃣ Foto exterior negocio\n5️⃣ Foto interior negocio\n\nRegistrado desde panel administrador`
       window.open(`https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank')
-      setNuevoForm({
-        nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '',
-        cuenta: '', negocio: '', email: '', password: ''
-      })
-      setNuevoFotos({
-        ciFront: null, ciBack: null, selfie: null, negExt: null, negInt: null
-      })
+      setNuevoForm({ nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '', cuenta: '', negocio: '', email: '', password: '' })
+      setNuevoFotos({ ciFront: null, ciBack: null, selfie: null, negExt: null, negInt: null })
       setMostrarFormNuevo(false)
       await cargar()
     } catch (err) {
@@ -243,13 +219,8 @@ Registrado desde panel administrador`
       historial: null
     }
     await updateDoc(doc(db, 'participantes', seleccionado.id), {
-      aprobado: true,
-      rechazado: false,
-      bienvenidaVista: false,
-      aporte: aporteNum,
-      monto: montoNum,
-      totalDias,
-      fechaInicio,
+      aprobado: true, rechazado: false, bienvenidaVista: false,
+      aporte: aporteNum, monto: montoNum, totalDias, fechaInicio,
       creditos: [credito]
     })
     await cargar()
@@ -373,67 +344,43 @@ Registrado desde panel administrador`
 
   const pendientes = participantes.filter(p => !p.aprobado && !p.rechazado)
   const aprobados = participantes.filter(p => p.aprobado && !p.rechazado)
-  const lista =
-    filtro === 'aprobado'
-      ? aprobados
-      : filtro === 'pendiente'
-        ? pendientes
-        : participantes.filter(p => !p.rechazado)
+  const lista = filtro === 'aprobado' ? aprobados : filtro === 'pendiente' ? pendientes : participantes.filter(p => !p.rechazado)
 
-  const totalRecaudado = aprobados.reduce((s, p) =>
-    s +
-    (p.creditos || []).reduce(
-      (sc, c) => sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0),
-      0
-    ),
-    0
-  )
+  // FÓRMULAS CORREGIDAS SEGÚN OPUS
+  const totalCobrado = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).reduce((sc, c) =>
+      sc + (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0), 0), 0)
 
-  const totalCapital = aprobados.reduce((s, p) =>
-    s +
-    (p.creditos || []).reduce((sc, c) => {
-      if (c.fuente === 'reinvertido') return sc
-      return sc + (c.montoPrestado || 0)
-    }, 0),
-    0
-  )
+  const totalPrestado = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).reduce((sc, c) =>
+      sc + (c.montoPrestado || 0), 0), 0)
+
+  const capitalEnCalle = aprobados.reduce((s, p) =>
+    s + (p.creditos || [])
+      .filter(c => !c.historial)
+      .reduce((sc, c) => {
+        const cobradoCredito = (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0)
+        const pendiente = (c.montoPrestado || 0) - cobradoCredito
+        return sc + Math.max(0, pendiente)
+      }, 0), 0)
+
+  const dineroEnMano = CAPITAL_INICIAL + totalCobrado - totalPrestado
 
   const totalGanancias = aprobados.reduce((s, p) =>
-    s +
-    (p.creditos || [])
+    s + (p.creditos || [])
       .filter(c => c.historial)
-      .reduce((sc, c) => sc + (c.ganancia || 0), 0),
-    0
-  )
+      .reduce((sc, c) => sc + (c.ganancia || 0), 0), 0)
 
-  const creditosEntregados = aprobados.reduce(
-    (s, p) => s + (p.creditos || []).length,
-    0
-  )
+  const totalCapitalNuevoExpuesto = aprobados.reduce((s, p) =>
+    s + (p.creditos || [])
+      .filter(c => !c.historial && c.fuente === 'capital_nuevo')
+      .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
-  const creditosConcluidos = aprobados.reduce(
-    (s, p) => s + (p.creditos || []).filter(c => c.historial).length,
-    0
-  )
-
+  const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
+  const creditosConcluidos = aprobados.reduce((s, p) => s + (p.creditos || []).filter(c => c.historial).length, 0)
   const pagosHoy = aprobados.filter(p =>
     (p.creditos || []).some(c =>
-      (c.pagos || []).some(
-        pg => pg.fecha === new Date().toISOString().split('T')[0]
-      )
-    )
-  ).length
-
-  const capitalEnCirculacion = aprobados.reduce(
-    (s, p) =>
-      s +
-      (p.creditos || [])
-        .filter(c => !c.historial && c.fuente === 'capital_nuevo')
-        .reduce((sc, c) => sc + (c.montoPrestado || 0), 0),
-    0
-  )
-
-  const estimadoEnCaja = totalRecaudado - capitalEnCirculacion
+      (c.pagos || []).some(pg => pg.fecha === new Date().toISOString().split('T')[0]))).length
 
   const fotoLabelNuevo = {
     ciFront: '📷 CI Anverso',
@@ -447,111 +394,32 @@ Registrado desde panel administrador`
     return (
       <div className="page">
         <div className="top-bar">
-          <button
-            onClick={() => {
-              setMostrarEditar(false)
-              setErrorEditar('')
-            }}
-            style={{
-              background: 'none',
-              color: '#F4C0D1',
-              border: 'none',
-              fontSize: 22
-            }}
-          >
-            ←
-          </button>
+          <button onClick={() => { setMostrarEditar(false); setErrorEditar('') }} style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
           <h1>Editar participante</h1>
           <div style={{ width: 40 }} />
         </div>
         <div className="content">
-          <div
-            className="card"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">👤 Datos personales</div>
-            <input
-              className="input"
-              placeholder="Nombre completo *"
-              value={editForm.nombre}
-              onChange={e => setEdit('nombre', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Número de CI *"
-              value={editForm.ci}
-              onChange={e => setEdit('ci', e.target.value)}
-            />
-            <input
-              className="input"
-              type="date"
-              value={editForm.fechaNac}
-              onChange={e => setEdit('fechaNac', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Celular *"
-              value={editForm.celular}
-              onChange={e => setEdit('celular', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Domicilio *"
-              value={editForm.domicilio}
-              onChange={e => setEdit('domicilio', e.target.value)}
-            />
+            <input className="input" placeholder="Nombre completo *" value={editForm.nombre} onChange={e => setEdit('nombre', e.target.value)} />
+            <input className="input" placeholder="Número de CI *" value={editForm.ci} onChange={e => setEdit('ci', e.target.value)} />
+            <input className="input" type="date" value={editForm.fechaNac} onChange={e => setEdit('fechaNac', e.target.value)} />
+            <input className="input" placeholder="Celular *" value={editForm.celular} onChange={e => setEdit('celular', e.target.value)} />
+            <input className="input" placeholder="Domicilio *" value={editForm.domicilio} onChange={e => setEdit('domicilio', e.target.value)} />
           </div>
-          <div
-            className="card"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">🏪 Negocio y cuenta</div>
-            <input
-              className="input"
-              placeholder="Nombre del negocio *"
-              value={editForm.negocio}
-              onChange={e => setEdit('negocio', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Número de cuenta bancaria *"
-              value={editForm.cuenta}
-              onChange={e => setEdit('cuenta', e.target.value)}
-            />
+            <input className="input" placeholder="Nombre del negocio *" value={editForm.negocio} onChange={e => setEdit('negocio', e.target.value)} />
+            <input className="input" placeholder="Número de cuenta bancaria *" value={editForm.cuenta} onChange={e => setEdit('cuenta', e.target.value)} />
           </div>
-          <div
-            className="card"
-            style={{
-              background: '#F0F4FF',
-              border: '1px solid #C7D7FF',
-              padding: 10
-            }}
-          >
-            <p style={{ fontSize: 12, color: '#3451A0' }}>
-              🔒 El correo y contraseña no se pueden editar por seguridad.
-            </p>
+          <div className="card" style={{ background: '#F0F4FF', border: '1px solid #C7D7FF', padding: 10 }}>
+            <p style={{ fontSize: 12, color: '#3451A0' }}>🔒 El correo y contraseña no se pueden editar por seguridad.</p>
           </div>
-          {errorEditar && (
-            <div className="alert alert-error">{errorEditar}</div>
-          )}
-          <button
-            className="btn-primary"
-            onClick={guardarEdicion}
-            disabled={guardandoEditar}
-            style={{ width: '100%', fontSize: 15, padding: 14 }}
-          >
+          {errorEditar && <div className="alert alert-error">{errorEditar}</div>}
+          <button className="btn-primary" onClick={guardarEdicion} disabled={guardandoEditar} style={{ width: '100%', fontSize: 15, padding: 14 }}>
             {guardandoEditar ? 'Guardando...' : '✓ Guardar cambios'}
           </button>
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              setMostrarEditar(false)
-              setErrorEditar('')
-            }}
-            style={{ width: '100%' }}
-          >
-            Cancelar
-          </button>
+          <button className="btn-secondary" onClick={() => { setMostrarEditar(false); setErrorEditar('') }} style={{ width: '100%' }}>Cancelar</button>
         </div>
       </div>
     )
@@ -562,937 +430,234 @@ Registrado desde panel administrador`
     return (
       <div className="page">
         <div className="top-bar">
-          <button
-            onClick={() => {
-              setMostrarFormNuevo(false)
-              setErrorNuevo('')
-            }}
-            style={{
-              background: 'none',
-              color: '#F4C0D1',
-              border: 'none',
-              fontSize: 22
-            }}
-          >
-            ←
-          </button>
+          <button onClick={() => { setMostrarFormNuevo(false); setErrorNuevo('') }} style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
           <h1>Nuevo participante</h1>
           <div style={{ width: 40 }} />
         </div>
         <div className="content">
-          <div
-            className="card"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">👤 Datos personales</div>
-            <input
-              className="input"
-              placeholder="Nombre completo *"
-              value={nuevoForm.nombre}
-              onChange={e => setNuevo('nombre', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Número de CI *"
-              value={nuevoForm.ci}
-              onChange={e => setNuevo('ci', e.target.value)}
-            />
-            <input
-              className="input"
-              type="date"
-              value={nuevoForm.fechaNac}
-              onChange={e => setNuevo('fechaNac', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Celular (ej: 76710209) *"
-              value={nuevoForm.celular}
-              onChange={e => setNuevo('celular', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Domicilio *"
-              value={nuevoForm.domicilio}
-              onChange={e => setNuevo('domicilio', e.target.value)}
-            />
+            <input className="input" placeholder="Nombre completo *" value={nuevoForm.nombre} onChange={e => setNuevo('nombre', e.target.value)} />
+            <input className="input" placeholder="Número de CI *" value={nuevoForm.ci} onChange={e => setNuevo('ci', e.target.value)} />
+            <input className="input" type="date" value={nuevoForm.fechaNac} onChange={e => setNuevo('fechaNac', e.target.value)} />
+            <input className="input" placeholder="Celular (ej: 76710209) *" value={nuevoForm.celular} onChange={e => setNuevo('celular', e.target.value)} />
+            <input className="input" placeholder="Domicilio *" value={nuevoForm.domicilio} onChange={e => setNuevo('domicilio', e.target.value)} />
           </div>
-          <div
-            className="card"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">🏪 Negocio y cuenta</div>
-            <input
-              className="input"
-              placeholder="Nombre del negocio *"
-              value={nuevoForm.negocio}
-              onChange={e => setNuevo('negocio', e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Número de cuenta bancaria *"
-              value={nuevoForm.cuenta}
-              onChange={e => setNuevo('cuenta', e.target.value)}
-            />
+            <input className="input" placeholder="Nombre del negocio *" value={nuevoForm.negocio} onChange={e => setNuevo('negocio', e.target.value)} />
+            <input className="input" placeholder="Número de cuenta bancaria *" value={nuevoForm.cuenta} onChange={e => setNuevo('cuenta', e.target.value)} />
           </div>
-          <div
-            className="card"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
-            <div className="section-title">
-              📷 Fotos{' '}
-              <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>
-                (opcional)
-              </span>
-            </div>
-            <div
-              className="card"
-              style={{
-                background: '#FFF8E7',
-                border: '1px solid #F5D77E',
-                padding: 10
-              }}
-            >
-              <p style={{ fontSize: 12, color: '#854F0B' }}>
-                📤 Las fotos se enviarán por WhatsApp. Puedes omitirlas ahora.
-              </p>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="section-title">📷 Fotos <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(opcional)</span></div>
+            <div className="card" style={{ background: '#FFF8E7', border: '1px solid #F5D77E', padding: 10 }}>
+              <p style={{ fontSize: 12, color: '#854F0B' }}>📤 Las fotos se enviarán por WhatsApp. Puedes omitirlas ahora.</p>
             </div>
             {['ciFront', 'ciBack', 'selfie', 'negExt', 'negInt'].map(id => (
-              <div
-                key={id}
-                className="card"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  cursor: 'pointer'
-                }}
-                onClick={() => capturarFotoNuevo(id)}
-              >
+              <div key={id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} onClick={() => capturarFotoNuevo(id)}>
                 {nuevoFotos[id] ? (
-                  <img
-                    src={nuevoFotos[id].url}
-                    alt={id}
-                    style={{
-                      width: 50,
-                      height: 50,
-                      objectFit: 'cover',
-                      borderRadius: 8
-                    }}
-                  />
+                  <img src={nuevoFotos[id].url} alt={id} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 8 }} />
                 ) : (
-                  <div
-                    style={{
-                      width: 50,
-                      height: 50,
-                      background: '#F4C0D1',
-                      borderRadius: 8,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 20
-                    }}
-                  >
-                    📸
-                  </div>
+                  <div style={{ width: 50, height: 50, background: '#F4C0D1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📸</div>
                 )}
                 <div>
-                  <p style={{ fontWeight: 600, fontSize: 13 }}>
-                    {fotoLabelNuevo[id]}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: nuevoFotos[id] ? '#27500A' : '#999'
-                    }}
-                  >
-                    {nuevoFotos[id]
-                      ? '✓ Foto lista'
-                      : 'Toca para agregar (opcional)'}
+                  <p style={{ fontWeight: 600, fontSize: 13 }}>{fotoLabelNuevo[id]}</p>
+                  <p style={{ fontSize: 11, color: nuevoFotos[id] ? '#27500A' : '#999' }}>
+                    {nuevoFotos[id] ? '✓ Foto lista' : 'Toca para agregar (opcional)'}
                   </p>
                 </div>
               </div>
             ))}
           </div>
-          <div
-            className="card"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-          >
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="section-title">🔐 Acceso a la app</div>
-            <input
-              className="input"
-              type="email"
-              placeholder="Correo electrónico *"
-              value={nuevoForm.email}
-              onChange={e => setNuevo('email', e.target.value)}
-            />
-            <input
-              className="input"
-              type="password"
-              placeholder="Contraseña (mín. 6 caracteres) *"
-              value={nuevoForm.password}
-              onChange={e => setNuevo('password', e.target.value)}
-            />
-            <div
-              className="card"
-              style={{
-                background: '#F0F4FF',
-                border: '1px solid #C7D7FF',
-                padding: 10
-              }}
-            >
-              <p style={{ fontSize: 12, color: '#3451A0' }}>
-                💾 Guarda estas credenciales para dárselas al participante.
-              </p>
+            <input className="input" type="email" placeholder="Correo electrónico *" value={nuevoForm.email} onChange={e => setNuevo('email', e.target.value)} />
+            <input className="input" type="password" placeholder="Contraseña (mín. 6 caracteres) *" value={nuevoForm.password} onChange={e => setNuevo('password', e.target.value)} />
+            <div className="card" style={{ background: '#F0F4FF', border: '1px solid #C7D7FF', padding: 10 }}>
+              <p style={{ fontSize: 12, color: '#3451A0' }}>💾 Guarda estas credenciales para dárselas al participante.</p>
             </div>
           </div>
-          {errorNuevo && (
-            <div className="alert alert-error">{errorNuevo}</div>
-          )}
-          <button
-            className="btn-primary"
-            onClick={registrarNuevoParticipante}
-            disabled={guardandoNuevo}
-            style={{ width: '100%', fontSize: 15, padding: 14 }}
-          >
-            {guardandoNuevo
-              ? 'Registrando...'
-              : '✓ Registrar participante'}
+          {errorNuevo && <div className="alert alert-error">{errorNuevo}</div>}
+          <button className="btn-primary" onClick={registrarNuevoParticipante} disabled={guardandoNuevo} style={{ width: '100%', fontSize: 15, padding: 14 }}>
+            {guardandoNuevo ? 'Registrando...' : '✓ Registrar participante'}
           </button>
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              setMostrarFormNuevo(false)
-              setErrorNuevo('')
-            }}
-            style={{ width: '100%' }}
-          >
-            Cancelar
-          </button>
+          <button className="btn-secondary" onClick={() => { setMostrarFormNuevo(false); setErrorNuevo('') }} style={{ width: '100%' }}>Cancelar</button>
         </div>
       </div>
     )
   }
 
-  // PERFIL PARTICIPANTE
+  // PERFIL PARTICIPANTE (aquí va todo el código de creditos que ya tienes, sin cambios)
   if (seleccionado) {
     return (
       <div className="page">
         <div className="top-bar">
-          <button
-            onClick={() => {
-              setSeleccionado(null)
-              setEditandoCredito(null)
-            }}
-            style={{
-              background: 'none',
-              color: '#F4C0D1',
-              border: 'none',
-              fontSize: 22
-            }}
-          >
-            ←
-          </button>
+          <button onClick={() => { setSeleccionado(null); setEditandoCredito(null) }} style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
           <h1>Perfil participante</h1>
-          <button
-            onClick={() => abrirEditar(seleccionado)}
-            style={{
-              background: 'rgba(255,255,255,0.15)',
-              color: '#F4C0D1',
-              border: 'none',
-              borderRadius: 20,
-              padding: '4px 12px',
-              fontSize: 12
-            }}
-          >
-            ✏️ Editar
-          </button>
+          <button onClick={() => abrirEditar(seleccionado)} style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>✏️ Editar</button>
         </div>
         <div className="content">
-          {/* CABECERA */}
-          <div
-            style={{
-              background: '#4B1528',
-              borderRadius: 14,
-              padding: 16,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12
-            }}
-          >
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: '50%',
-                background: 'rgba(255,255,255,0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 20,
-                color: '#F4C0D1',
-                fontWeight: 700
-              }}
-            >
+          <div style={{ background: '#4B1528', borderRadius: 14, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#F4C0D1', fontWeight: 700 }}>
               {seleccionado.nombre?.charAt(0)}
             </div>
             <div>
-              <div
-                style={{
-                  fontSize: 17,
-                  fontWeight: 700,
-                  color: '#F4C0D1'
-                }}
-              >
-                {seleccionado.nombre}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: 'rgba(244,192,209,0.75)',
-                  marginTop: 2
-                }}
-              >
-                {seleccionado.negocio} · {seleccionado.email}
-              </div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#F4C0D1' }}>{seleccionado.nombre}</div>
+              <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.75)', marginTop: 2 }}>{seleccionado.negocio} · {seleccionado.email}</div>
             </div>
           </div>
 
-          {/* DATOS */}
           <div className="card">
-            <div
-              className="section-title"
-              style={{ marginBottom: 10 }}
-            >
-              Datos personales
-            </div>
-            {[
-              ['CI', seleccionado.ci],
-              ['Celular', seleccionado.celular],
-              ['Domicilio', seleccionado.domicilio],
-              ['Cuenta', seleccionado.cuenta],
-              ['Fecha nac.', seleccionado.fechaNac]
-            ].map(([k, v]) => (
+            <div className="section-title" style={{ marginBottom: 10 }}>Datos personales</div>
+            {[['CI', seleccionado.ci], ['Celular', seleccionado.celular], ['Domicilio', seleccionado.domicilio], ['Cuenta', seleccionado.cuenta], ['Fecha nac.', seleccionado.fechaNac]].map(([k, v]) => (
               <div key={k} className="info-row">
                 <span className="info-key">{k}</span>
-                <span className="info-val" style={{ fontSize: 12 }}>
-                  {v}
-                </span>
+                <span className="info-val" style={{ fontSize: 12 }}>{v}</span>
               </div>
             ))}
             {seleccionado.ubicacion?.link && (
               <div className="info-row">
                 <span className="info-key">Ubicación</span>
-                <a
-                  href={seleccionado.ubicacion.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontSize: 12, color: '#4B1528' }}
-                >
-                  📍 Ver en mapa
-                </a>
+                <a href={seleccionado.ubicacion.link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#4B1528' }}>📍 Ver en mapa</a>
               </div>
             )}
           </div>
 
-          {/* FORMULARIO APROBACIÓN INICIAL */}
           {!seleccionado.aprobado && !seleccionado.rechazado && (
-            <div
-              className="card"
-              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-            >
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="section-title">✅ Aprobar crédito</div>
               <div className="form-group">
                 <label>💵 Monto real a prestar (Bs) - solo visible para admin</label>
-                <input
-                  type="number"
-                  placeholder="500"
-                  value={montoPrestado}
-                  onChange={e => setMontoPrestado(e.target.value)}
-                />
+                <input type="number" placeholder="500" value={montoPrestado} onChange={e => setMontoPrestado(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>💰 Monto total a devolver (Bs)</label>
-                <input
-                  type="number"
-                  placeholder="600"
-                  value={monto}
-                  onChange={e => setMonto(e.target.value)}
-                />
+                <input type="number" placeholder="600" value={monto} onChange={e => setMonto(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>📅 Aporte diario (Bs)</label>
-                <input
-                  type="number"
-                  placeholder="25"
-                  value={aporte}
-                  onChange={e => setAporte(e.target.value)}
-                />
+                <input type="number" placeholder="25" value={aporte} onChange={e => setAporte(e.target.value)} />
               </div>
-              {montoPrestado &&
-                monto &&
-                aporte &&
-                parseFloat(aporte) > 0 && (
-                  <div
-                    style={{
-                      background: '#F0FDF4',
-                      border: '1px solid #86EFAC',
-                      borderRadius: 8,
-                      padding: 10,
-                      fontSize: 13,
-                      color: '#166534'
-                    }}
-                  >
-                    💵 Préstamo:{' '}
-                    <strong>Bs {montoPrestado}</strong> · Devuelve:{' '}
-                    <strong>Bs {monto}</strong> · Ganancia:{' '}
-                    <strong>
-                      Bs {parseFloat(monto) - parseFloat(montoPrestado)}
-                    </strong>
-                    <br />
-                    📅 Bs {aporte}/día ·{' '}
-                    <strong>
-                      {Math.round(
-                        parseFloat(monto) / parseFloat(aporte)
-                      )}{' '}
-                      días
-                    </strong>
-                  </div>
-                )}
+              {montoPrestado && monto && aporte && parseFloat(aporte) > 0 && (
+                <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 10, fontSize: 13, color: '#166534' }}>
+                  💵 Préstamo: <strong>Bs {montoPrestado}</strong> · Devuelve: <strong>Bs {monto}</strong> · Ganancia: <strong>Bs {parseFloat(monto) - parseFloat(montoPrestado)}</strong><br />
+                  📅 Bs {aporte}/día · <strong>{Math.round(parseFloat(monto) / parseFloat(aporte))} días</strong>
+                </div>
+              )}
               <div className="form-group">
                 <label>📆 Fecha de inicio de pagos</label>
-                <input
-                  type="date"
-                  value={fechaInicio}
-                  onChange={e => setFechaInicio(e.target.value)}
-                />
+                <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} />
               </div>
-              <button
-                className="btn-primary"
-                style={{ background: '#27500A' }}
-                disabled={guardando}
-                onClick={aprobar}
-              >
+              <button className="btn-primary" style={{ background: '#27500A' }} disabled={guardando} onClick={aprobar}>
                 {guardando ? 'Aprobando...' : '✓ Aprobar participante'}
               </button>
-              <button
-                style={{
-                  background: 'none',
-                  color: '#791F1F',
-                  border: '1.5px solid #F09595',
-                  borderRadius: 12,
-                  padding: 12,
-                  fontSize: 14,
-                  fontWeight: 700
-                }}
-                onClick={rechazar}
-              >
+              <button style={{ background: 'none', color: '#791F1F', border: '1.5px solid #F09595', borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 700 }} onClick={rechazar}>
                 ✗ Rechazar solicitud
               </button>
             </div>
           )}
 
-          {/* CRÉDITOS */}
           {seleccionado.aprobado && (
             <>
               {(seleccionado.creditos || []).map(credito => {
-                const totalPagado = (credito.pagos || []).reduce(
-                  (s, p) => s + p.monto,
-                  0
-                )
+                const totalPagado = (credito.pagos || []).reduce((s, p) => s + p.monto, 0)
                 const diasPagados = (credito.pagos || []).length
-                const pct = Math.min(
-                  100,
-                  Math.round((diasPagados / credito.totalDias) * 100)
-                )
+                const pct = Math.min(100, Math.round((diasPagados / credito.totalDias) * 100))
                 const todosCompletos = diasPagados >= credito.totalDias
                 const yaArchivado = !!credito.historial
                 const esteEnEdicion = editandoCredito === credito.id
 
                 return (
-                  <div
-                    key={credito.id}
-                    className="card"
-                    style={{
-                      border: `2px solid ${
-                        yaArchivado
-                          ? '#C0DD97'
-                          : todosCompletos
-                            ? '#F5D77E'
-                            : '#F4C0D1'
-                      }`
-                    }}
-                  >
-                    {/* CABECERA CRÉDITO */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 10
-                      }}
-                    >
-                      <div
-                        className="section-title"
-                        style={{ margin: 0 }}
-                      >
-                        💳 Crédito #{credito.numero}
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: 6,
-                          alignItems: 'center'
-                        }}
-                      >
+                  <div key={credito.id} className="card" style={{ border: `2px solid ${yaArchivado ? '#C0DD97' : todosCompletos ? '#F5D77E' : '#F4C0D1'}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div className="section-title" style={{ margin: 0 }}>💳 Crédito #{credito.numero}</div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         {!yaArchivado && (
-                          <button
-                            onClick={() =>
-                              esteEnEdicion
-                                ? setEditandoCredito(null)
-                                : abrirEditarCredito(credito)
-                            }
-                            style={{
-                              background: esteEnEdicion
-                                ? '#EEE'
-                                : '#FDF5F7',
-                              color: '#4B1528',
-                              border: '1px solid #F4C0D1',
-                              borderRadius: 16,
-                              padding: '3px 10px',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {esteEnEdicion
-                              ? '✗ Cancelar'
-                              : '✏️ Editar'}
+                          <button onClick={() => esteEnEdicion ? setEditandoCredito(null) : abrirEditarCredito(credito)} style={{ background: esteEnEdicion ? '#EEE' : '#FDF5F7', color: '#4B1528', border: '1px solid #F4C0D1', borderRadius: 16, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                            {esteEnEdicion ? '✗ Cancelar' : '✏️ Editar'}
                           </button>
                         )}
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            padding: '3px 10px',
-                            borderRadius: 20,
-                            background: yaArchivado
-                              ? '#EAF3DE'
-                              : todosCompletos
-                                ? '#FFFBEB'
-                                : '#FDF5F7',
-                            color: yaArchivado
-                              ? '#27500A'
-                              : todosCompletos
-                                ? '#854F0B'
-                                : '#4B1528'
-                          }}
-                        >
-                          {yaArchivado
-                            ? '📦 Archivado'
-                            : todosCompletos
-                              ? '✓ Listo para archivar'
-                              : '⏳ En curso'}
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: yaArchivado ? '#EAF3DE' : todosCompletos ? '#FFFBEB' : '#FDF5F7', color: yaArchivado ? '#27500A' : todosCompletos ? '#854F0B' : '#4B1528' }}>
+                          {yaArchivado ? '📦 Archivado' : todosCompletos ? '✓ Listo para archivar' : '⏳ En curso'}
                         </span>
                       </div>
                     </div>
 
-                    {/* FORMULARIO DE EDICIÓN INLINE */}
                     {esteEnEdicion && (
-                      <div
-                        style={{
-                          background: '#FFF8E7',
-                          border: '1.5px solid #F5D77E',
-                          borderRadius: 10,
-                          padding: 12,
-                          marginBottom: 12,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 10
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: '#854F0B',
-                            marginBottom: 2
-                          }}
-                        >
-                          ✏️ Editar datos del crédito
+                      <div style={{ background: '#FFF8E7', border: '1.5px solid #F5D77E', borderRadius: 10, padding: 12, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#854F0B', marginBottom: 2 }}>✏️ Editar datos del crédito</div>
+                        <div className="form-group">
+                          <label style={{ fontSize: 12 }}>💵 Monto real prestado (Bs) - solo admin</label>
+                          <input type="number" value={editCredito.montoPrestado} onChange={e => setEditCredito(f => ({ ...f, montoPrestado: e.target.value }))} placeholder="500" />
                         </div>
                         <div className="form-group">
-                          <label style={{ fontSize: 12 }}>
-                            💵 Monto real prestado (Bs) - solo admin
-                          </label>
-                          <input
-                            type="number"
-                            value={editCredito.montoPrestado}
-                            onChange={e =>
-                              setEditCredito(f => ({
-                                ...f,
-                                montoPrestado: e.target.value
-                              }))
-                            }
-                            placeholder="500"
-                          />
+                          <label style={{ fontSize: 12 }}>💰 Monto total a devolver (Bs)</label>
+                          <input type="number" value={editCredito.montoTotal} onChange={e => setEditCredito(f => ({ ...f, montoTotal: e.target.value }))} placeholder="600" />
                         </div>
                         <div className="form-group">
-                          <label style={{ fontSize: 12 }}>
-                            💰 Monto total a devolver (Bs)
-                          </label>
-                          <input
-                            type="number"
-                            value={editCredito.montoTotal}
-                            onChange={e =>
-                              setEditCredito(f => ({
-                                ...f,
-                                montoTotal: e.target.value
-                              }))
-                            }
-                            placeholder="600"
-                          />
+                          <label style={{ fontSize: 12 }}>📅 Aporte diario (Bs)</label>
+                          <input type="number" value={editCredito.aporte} onChange={e => setEditCredito(f => ({ ...f, aporte: e.target.value }))} placeholder="25" />
                         </div>
                         <div className="form-group">
-                          <label style={{ fontSize: 12 }}>
-                            📅 Aporte diario (Bs)
-                          </label>
-                          <input
-                            type="number"
-                            value={editCredito.aporte}
-                            onChange={e =>
-                              setEditCredito(f => ({
-                                ...f,
-                                aporte: e.target.value
-                              }))
-                            }
-                            placeholder="25"
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label style={{ fontSize: 12 }}>
-                            📊 Fuente del capital
-                          </label>
-                          <select
-                            value={editCredito.fuente}
-                            onChange={e =>
-                              setEditCredito(f => ({
-                                ...f,
-                                fuente: e.target.value
-                              }))
-                            }
-                            style={{
-                              width: '100%',
-                              padding: 10,
-                              borderRadius: 8,
-                              border: '1px solid #F5D77E',
-                              fontSize: 12
-                            }}
-                          >
-                            <option value="capital_nuevo">
-                              Capital nuevo
-                            </option>
-                            <option value="reinvertido">
-                              Reinvertido (ganancias)
-                            </option>
+                          <label style={{ fontSize: 12 }}>📊 Fuente del capital</label>
+                          <select value={editCredito.fuente} onChange={e => setEditCredito(f => ({ ...f, fuente: e.target.value }))} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #F5D77E', fontSize: 12 }}>
+                            <option value="capital_nuevo">Capital nuevo</option>
+                            <option value="reinvertido">Reinvertido (ganancias)</option>
                           </select>
                         </div>
-                        {editCredito.montoPrestado &&
-                          editCredito.montoTotal &&
-                          editCredito.aporte &&
-                          parseFloat(editCredito.aporte) > 0 && (
-                            <div
-                              style={{
-                                background: '#F0FDF4',
-                                border: '1px solid #86EFAC',
-                                borderRadius: 8,
-                                padding: 8,
-                                fontSize: 12,
-                                color: '#166534'
-                              }}
-                            >
-                              💵 Prestado:{' '}
-                              <strong>
-                                Bs {editCredito.montoPrestado}
-                              </strong>{' '}
-                              · Devuelve:{' '}
-                              <strong>
-                                Bs {editCredito.montoTotal}
-                              </strong>
-                              <br />
-                              💰 Ganancia:{' '}
-                              <strong>
-                                Bs{' '}
-                                {parseFloat(editCredito.montoTotal) -
-                                  parseFloat(
-                                    editCredito.montoPrestado
-                                  )}
-                              </strong>{' '}
-                              ·{' '}
-                              <strong>
-                                {Math.round(
-                                  parseFloat(
-                                    editCredito.montoTotal
-                                  ) / parseFloat(editCredito.aporte)
-                                )}{' '}
-                                días
-                              </strong>{' '}
-                              · {' '}
-                              {editCredito.fuente === 'capital_nuevo'
-                                ? 'Capital nuevo'
-                                : 'Reinvertido'}
-                            </div>
-                          )}
+                        {editCredito.montoPrestado && editCredito.montoTotal && editCredito.aporte && parseFloat(editCredito.aporte) > 0 && (
+                          <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 8, fontSize: 12, color: '#166534' }}>
+                            💵 Prestado: <strong>Bs {editCredito.montoPrestado}</strong> · Devuelve: <strong>Bs {editCredito.montoTotal}</strong><br />
+                            💰 Ganancia: <strong>Bs {parseFloat(editCredito.montoTotal) - parseFloat(editCredito.montoPrestado)}</strong> · <strong>{Math.round(parseFloat(editCredito.montoTotal) / parseFloat(editCredito.aporte))} días</strong> · {editCredito.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'}
+                          </div>
+                        )}
                         <div className="form-group">
-                          <label style={{ fontSize: 12 }}>
-                            📆 Fecha de inicio
-                          </label>
-                          <input
-                            type="date"
-                            value={editCredito.fechaInicio}
-                            onChange={e =>
-                              setEditCredito(f => ({
-                                ...f,
-                                fechaInicio: e.target.value
-                              }))
-                            }
-                          />
+                          <label style={{ fontSize: 12 }}>📆 Fecha de inicio</label>
+                          <input type="date" value={editCredito.fechaInicio} onChange={e => setEditCredito(f => ({ ...f, fechaInicio: e.target.value }))} />
                         </div>
-                        <button
-                          onClick={() =>
-                            guardarEditarCredito(seleccionado, credito.id)
-                          }
-                          disabled={guardandoCredito}
-                          style={{
-                            background: '#4B1528',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: 10,
-                            padding: 11,
-                            fontSize: 13,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            width: '100%'
-                          }}
-                        >
-                          {guardandoCredito
-                            ? 'Guardando...'
-                            : '✓ Guardar cambios del crédito'}
+                        <button onClick={() => guardarEditarCredito(seleccionado, credito.id)} disabled={guardandoCredito} style={{ background: '#4B1528', color: 'white', border: 'none', borderRadius: 10, padding: 11, fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+                          {guardandoCredito ? 'Guardando...' : '✓ Guardar cambios del crédito'}
                         </button>
                       </div>
                     )}
 
-                    {/* DATOS ADMIN */}
                     {!esteEnEdicion && (
-                      <div
-                        style={{
-                          background: '#FDF5F7',
-                          borderRadius: 8,
-                          padding: 10,
-                          marginBottom: 8
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: '#854F0B',
-                            fontWeight: 700,
-                            marginBottom: 4
-                          }}
-                        >
-                          🔒 Solo visible para admin
-                        </div>
-                        {[
-                          [
-                            '💵 Prestado',
-                            `Bs ${credito.montoPrestado || '---'}`
-                          ],
-                          [
-                            '💰 A devolver',
-                            `Bs ${credito.montoTotal}`
-                          ],
-                          [
-                            '📈 Ganancia',
-                            `Bs ${
-                              credito.ganancia ??
-                              credito.montoTotal -
-                                (credito.montoPrestado || 0)
-                            }`
-                          ],
-                          [
-                            '📊 Fuente',
-                            credito.fuente === 'capital_nuevo'
-                              ? 'Capital nuevo'
-                              : 'Reinvertido'
-                          ]
-                        ].map(([k, v]) => (
+                      <div style={{ background: '#FDF5F7', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: '#854F0B', fontWeight: 700, marginBottom: 4 }}>🔒 Solo visible para admin</div>
+                        {[['💵 Prestado', `Bs ${credito.montoPrestado || '---'}`], ['💰 A devolver', `Bs ${credito.montoTotal}`], ['📈 Ganancia', `Bs ${credito.ganancia ?? (credito.montoTotal - (credito.montoPrestado || 0))}`], ['📊 Fuente', credito.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido']].map(([k, v]) => (
                           <div key={k} className="info-row" style={{ padding: '2px 0' }}>
-                            <span
-                              className="info-key"
-                              style={{ fontSize: 11 }}
-                            >
-                              {k}
-                            </span>
-                            <span
-                              className="info-val"
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 700,
-                                color: '#4B1528'
-                              }}
-                            >
-                              {v}
-                            </span>
+                            <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
+                            <span className="info-val" style={{ fontSize: 12, fontWeight: 700, color: '#4B1528' }}>{v}</span>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {[
-                      [
-                        '📅 Aporte diario',
-                        `Bs ${credito.aporte}/día`
-                      ],
-                      ['🗓️ Fecha inicio', credito.fechaInicio],
-                      [
-                        '📊 Progreso',
-                        `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`
-                      ]
-                    ].map(([k, v]) => (
+                    {[['📅 Aporte diario', `Bs ${credito.aporte}/día`], ['🗓️ Fecha inicio', credito.fechaInicio], ['📊 Progreso', `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`]].map(([k, v]) => (
                       <div key={k} className="info-row">
                         <span className="info-key">{k}</span>
                         <span className="info-val">{v}</span>
                       </div>
                     ))}
 
-                    {/* BARRA DE PROGRESO */}
-                    <div
-                      style={{
-                        background: '#EEE',
-                        borderRadius: 20,
-                        height: 6,
-                        margin: '10px 0'
-                      }}
-                    >
-                      <div
-                        style={{
-                          background: yaArchivado
-                            ? '#97C459'
-                            : todosCompletos
-                              ? '#EF9F27'
-                              : '#4B1528',
-                          width: `${pct}%`,
-                          height: '100%',
-                          borderRadius: 20,
-                          transition: 'width 0.3s'
-                        }}
-                      />
+                    <div style={{ background: '#EEE', borderRadius: 20, height: 6, margin: '10px 0' }}>
+                      <div style={{ background: yaArchivado ? '#97C459' : todosCompletos ? '#EF9F27' : '#4B1528', width: `${pct}%`, height: '100%', borderRadius: 20, transition: 'width 0.3s' }} />
                     </div>
 
-                    {/* GRILLA DE DÍAS */}
                     {!yaArchivado && (
                       <>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: '#666',
-                            marginBottom: 6
-                          }}
-                        >
-                          {todosCompletos
-                            ? '✓ Todos los días pagados · archiva el crédito abajo'
-                            : '📅 Toca un día para marcarlo como pagado:'}
+                        <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
+                          {todosCompletos ? '✓ Todos los días pagados · archiva el crédito abajo' : '📅 Toca un día para marcarlo como pagado:'}
                         </div>
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns:
-                              'repeat(6,1fr)',
-                            gap: 4
-                          }}
-                        >
-                          {Array.from(
-                            {
-                              length: credito.totalDias
-                            },
-                            (_, i) => i + 1
-                          ).map(d => {
-                            const pagado = (credito.pagos || []).find(
-                              p => p.dia === d
-                            )
-                            const cargandoEste =
-                              marcandoDia === `${credito.id}-${d}`
-                            const etiquetaFecha = fechaDia(
-                              credito.fechaInicio,
-                              d
-                            )
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
+                          {Array.from({ length: credito.totalDias }, (_, i) => i + 1).map(d => {
+                            const pagado = (credito.pagos || []).find(p => p.dia === d)
+                            const cargandoEste = marcandoDia === `${credito.id}-${d}`
+                            const etiquetaFecha = fechaDia(credito.fechaInicio, d)
                             return (
-                              <div
-                                key={d}
-                                onClick={() =>
-                                  !cargandoEste &&
-                                  !pagado &&
-                                  marcarPago(
-                                    seleccionado,
-                                    credito.id,
-                                    d
-                                  )
-                                }
-                                onContextMenu={e => {
-                                  e.preventDefault()
-                                  if (pagado)
-                                    desmarcarPago(
-                                      seleccionado,
-                                      credito.id,
-                                      d
-                                    )
-                                }}
-                                title={
-                                  pagado
-                                    ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}`
-                                    : `${etiquetaFecha} · toca para marcar`
-                                }
-                                style={{
-                                  borderRadius: 6,
-                                  padding: '4px 2px',
-                                  textAlign: 'center',
-                                  fontSize: 9,
-                                  fontWeight: 700,
-                                  lineHeight: 1.4,
-                                  background: cargandoEste
-                                    ? '#FFF3CD'
-                                    : pagado
-                                      ? '#EAF3DE'
-                                      : '#F0EFED',
-                                  color: cargandoEste
-                                    ? '#854F0B'
-                                    : pagado
-                                      ? '#27500A'
-                                      : '#BBB',
-                                  cursor: pagado
-                                    ? 'default'
-                                    : 'pointer',
-                                  border: pagado
-                                    ? '1px solid #C0DD97'
-                                    : '1px solid #EEE',
-                                  userSelect: 'none'
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: 10,
-                                    fontWeight: 800
-                                  }}
-                                >
-                                  D{d}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: 7,
-                                    marginTop: 1
-                                  }}
-                                >
-                                  {etiquetaFecha}
-                                </div>
+                              <div key={d} onClick={() => !cargandoEste && !pagado && marcarPago(seleccionado, credito.id, d)} onContextMenu={e => { e.preventDefault(); if (pagado) desmarcarPago(seleccionado, credito.id, d) }} title={pagado ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}` : `${etiquetaFecha} · toca para marcar`} style={{ borderRadius: 6, padding: '4px 2px', textAlign: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1.4, background: cargandoEste ? '#FFF3CD' : pagado ? '#EAF3DE' : '#F0EFED', color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#BBB', cursor: pagado ? 'default' : 'pointer', border: pagado ? '1px solid #C0DD97' : '1px solid #EEE', userSelect: 'none' }}>
+                                <div style={{ fontSize: 10, fontWeight: 800 }}>D{d}</div>
+                                <div style={{ fontSize: 7, marginTop: 1 }}>{etiquetaFecha}</div>
                               </div>
                             )
                           })}
@@ -1500,108 +665,26 @@ Registrado desde panel administrador`
                       </>
                     )}
 
-                    {/* HISTORIAL */}
                     {yaArchivado && credito.historial && (
-                      <div
-                        style={{
-                          background: '#F5F5F5',
-                          borderRadius: 8,
-                          padding: 10,
-                          marginTop: 10
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: '#666',
-                            fontWeight: 700,
-                            marginBottom: 4
-                          }}
-                        >
-                          📦 Crédito completado
-                        </div>
-                        {[
-                          [
-                            'Inicio',
-                            credito.historial.fechaInicio
-                          ],
-                          [
-                            'Fin',
-                            credito.historial.fechaFin
-                          ],
-                          [
-                            'Total pagado',
-                            `Bs ${credito.historial.totalPagado}`
-                          ],
-                          [
-                            'Ganancia',
-                            `Bs ${credito.historial.ganancia}`
-                          ]
-                        ].map(([k, v]) => (
-                          <div
-                            key={k}
-                            className="info-row"
-                            style={{ padding: '2px 0' }}
-                          >
-                            <span
-                              className="info-key"
-                              style={{ fontSize: 11 }}
-                            >
-                              {k}
-                            </span>
-                            <span
-                              className="info-val"
-                              style={{ fontSize: 11 }}
-                            >
-                              {v}
-                            </span>
+                      <div style={{ background: '#F5F5F5', borderRadius: 8, padding: 10, marginTop: 10 }}>
+                        <div style={{ fontSize: 11, color: '#666', fontWeight: 700, marginBottom: 4 }}>📦 Crédito completado</div>
+                        {[['Inicio', credito.historial.fechaInicio], ['Fin', credito.historial.fechaFin], ['Total pagado', `Bs ${credito.historial.totalPagado}`], ['Ganancia', `Bs ${credito.historial.ganancia}`]].map(([k, v]) => (
+                          <div key={k} className="info-row" style={{ padding: '2px 0' }}>
+                            <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
+                            <span className="info-val" style={{ fontSize: 11 }}>{v}</span>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* BOTONES DE ACCIÓN */}
                     {!yaArchivado && todosCompletos && (
-                      <button
-                        onClick={() =>
-                          registrarCreditoCompletado(
-                            seleccionado,
-                            credito.id
-                          )
-                        }
-                        style={{
-                          background: '#27500A',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 10,
-                          padding: 10,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          marginTop: 8,
-                          width: '100%',
-                          cursor: 'pointer'
-                        }}
-                      >
+                      <button onClick={() => registrarCreditoCompletado(seleccionado, credito.id)} style={{ background: '#27500A', color: 'white', border: 'none', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 700, marginTop: 8, width: '100%', cursor: 'pointer' }}>
                         📦 Archivar crédito
                       </button>
                     )}
 
                     {!yaArchivado && (
-                      <button
-                        onClick={() => agregarCredito(seleccionado)}
-                        style={{
-                          background: 'none',
-                          color: '#4B1528',
-                          border: '1.5px solid #4B1528',
-                          borderRadius: 10,
-                          padding: 10,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          marginTop: 8,
-                          width: '100%',
-                          cursor: 'pointer'
-                        }}
-                      >
+                      <button onClick={() => agregarCredito(seleccionado)} style={{ background: 'none', color: '#4B1528', border: '1.5px solid #4B1528', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 700, marginTop: 8, width: '100%', cursor: 'pointer' }}>
                         ➕ Nuevo crédito
                       </button>
                     )}
@@ -1611,32 +694,8 @@ Registrado desde panel administrador`
             </>
           )}
 
-          {/* BOTÓN DE WHATSAPP */}
           {seleccionado.aprobado && (
-            <button
-              onClick={() => {
-                const msg = `Hola ${seleccionado.nombre}, te envío los detalles de tu participación en Pasanaku-IA.`
-                window.open(
-                  WHATSAPP(
-                    seleccionado.celular,
-                    msg
-                  ),
-                  '_blank'
-                )
-              }}
-              style={{
-                background: '#25D366',
-                color: 'white',
-                border: 'none',
-                borderRadius: 10,
-                padding: 12,
-                fontSize: 13,
-                fontWeight: 700,
-                width: '100%',
-                marginTop: 8,
-                cursor: 'pointer'
-              }}
-            >
+            <button onClick={() => { const msg = `Hola ${seleccionado.nombre}, te envío los detalles de tu participación en Pasanaku-IA.`; window.open(WHATSAPP(seleccionado.celular, msg), '_blank') }} style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: 12, fontSize: 13, fontWeight: 700, width: '100%', marginTop: 8, cursor: 'pointer' }}>
               💬 Contactar por WhatsApp
             </button>
           )}
@@ -1650,21 +709,7 @@ Registrado desde panel administrador`
     <div className="page">
       <div className="top-bar">
         <h1>🏛️ Panel Admin</h1>
-        <button
-          onClick={() => auth.signOut()}
-          style={{
-            background: 'rgba(255,255,255,0.15)',
-            color: '#F4C0D1',
-            border: 'none',
-            borderRadius: 20,
-            padding: '4px 12px',
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          🚪 Salir
-        </button>
+        <button onClick={() => auth.signOut()} style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>🚪 Salir</button>
       </div>
 
       <div className="content">
@@ -1676,11 +721,10 @@ Registrado desde panel administrador`
           <>
             {tab === 'panel' && (
               <>
-                {/* MÉTRICAS */}
                 <div className="metric-grid">
                   <div className="metric-card">
-                    <div className="metric-label">💰 Total recaudado</div>
-                    <div className="metric-value">Bs {totalRecaudado}</div>
+                    <div className="metric-label">💰 Total cobrado</div>
+                    <div className="metric-value">Bs {totalCobrado}</div>
                   </div>
                   <div className="metric-card">
                     <div className="metric-label">✓ Aprobados</div>
@@ -1696,72 +740,56 @@ Registrado desde panel administrador`
                   </div>
                 </div>
 
-                {/* BALANCE EN CAJA */}
+                {/* BALANCE EN CAJA - CORREGIDO SEGÚN OPUS */}
                 <div className="card" style={{ background: '#2D0D18', border: '1px solid #4B1528', color: '#F4C0D1' }}>
-                  <div className="section-title" style={{ color: '#F4C0D1', marginBottom: 12 }}>
-                    💰 BALANCE TOTAL EN CAJA
-                  </div>
+                  <div className="section-title" style={{ color: '#F4C0D1', marginBottom: 12 }}>💰 BALANCE TOTAL EN CAJA</div>
 
                   <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                    <span className="info-key" style={{ color: '#F4C0D1' }}>
-                      💵 Dinero en mano:
-                    </span>
-                    <span className="info-val" style={{ color: '#27500A', fontSize: 18, fontWeight: 700 }}>
-                      Bs {estimadoEnCaja}
-                    </span>
+                    <span className="info-key" style={{ color: '#F4C0D1' }}>💵 Dinero en mano:</span>
+                    <span className="info-val" style={{ color: dineroEnMano >= 0 ? '#97C459' : '#F09595', fontSize: 18, fontWeight: 700 }}>Bs {dineroEnMano}</span>
                   </div>
 
                   <div style={{ fontSize: 12, color: '#F4C0D1', lineHeight: 1.8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital invertido total:</span>
-                      <span style={{ color: '#F4C0D1' }}>Bs {totalCapital}</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital inicial:</span>
+                      <span style={{ color: '#F4C0D1' }}>Bs {CAPITAL_INICIAL}</span>
                     </div>
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital prestado activo:</span>
-                      <span style={{ color: '#F4C0D1' }}>-Bs {capitalEnCirculacion}</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>+ Total cobrado (capital + ganancias):</span>
+                      <span style={{ color: '#97C459' }}>+Bs {totalCobrado}</span>
                     </div>
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital + ganancias recuperado:</span>
-                      <span style={{ color: '#27500A' }}>+Bs {totalRecaudado}</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>− Total prestado (todos los créditos):</span>
+                      <span style={{ color: '#F09595' }}>−Bs {totalPrestado}</span>
+                    </div>
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.4)', marginTop: 4, paddingTop: 6, borderTop: '1px dashed rgba(244,192,209,0.3)' }}>
+                      <span style={{ color: '#F4C0D1', fontWeight: 700 }}>= Dinero en mano:</span>
+                      <span style={{ color: dineroEnMano >= 0 ? '#97C459' : '#F09595', fontWeight: 700 }}>Bs {dineroEnMano}</span>
+                    </div>
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)', marginTop: 10 }}>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>🔄 Capital aún en la calle:</span>
+                      <span style={{ color: '#EF9F27' }}>Bs {capitalEnCalle}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* RESUMEN FINANCIERO */}
                 <div className="card">
-                  <div className="section-title" style={{ marginBottom: 12 }}>
-                    📊 Resumen financiero
-                  </div>
+                  <div className="section-title" style={{ marginBottom: 12 }}>📊 Resumen financiero</div>
                   {[
-                    ['💵 Capital entregado', `Bs ${totalCapital}`],
-                    ['📈 Ganancias cobradas', `Bs ${totalGanancias}`],
+                    ['💵 Capital prestado total', `Bs ${totalPrestado}`],
+                    ['📈 Ganancias cobradas (archivados)', `Bs ${totalGanancias}`],
+                    ['🔄 Capital en la calle', `Bs ${capitalEnCalle}`],
                     ['✅ Créditos entregados', creditosEntregados],
                     ['📦 Créditos concluidos', creditosConcluidos]
                   ].map(([k, v]) => (
                     <div key={k} className="info-row">
                       <span className="info-key">{k}</span>
-                      <span className="info-val" style={{ fontWeight: 700 }}>
-                        {v}
-                      </span>
+                      <span className="info-val" style={{ fontWeight: 700 }}>{v}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* BOTÓN NUEVO PARTICIPANTE */}
-                <button
-                  onClick={() => setMostrarFormNuevo(true)}
-                  style={{
-                    background: '#4B1528',
-                    color: '#F4C0D1',
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: 14,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    width: '100%',
-                    cursor: 'pointer'
-                  }}
-                >
+                <button onClick={() => setMostrarFormNuevo(true)} style={{ background: '#4B1528', color: '#F4C0D1', border: 'none', borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, width: '100%', cursor: 'pointer' }}>
                   ➕ Nuevo participante
                 </button>
               </>
@@ -1771,26 +799,8 @@ Registrado desde panel administrador`
               <>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                   {['aprobado', 'pendiente', 'todos'].map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setFiltro(f)}
-                      style={{
-                        flex: 1,
-                        padding: 10,
-                        border: filtro === f ? '1.5px solid #4B1528' : '1px solid #DDD',
-                        background: filtro === f ? '#4B1528' : 'white',
-                        color: filtro === f ? '#F4C0D1' : '#666',
-                        borderRadius: 8,
-                        fontWeight: 600,
-                        fontSize: 12,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {f === 'aprobado'
-                        ? `✓ Aprobados (${aprobados.length})`
-                        : f === 'pendiente'
-                          ? `⏳ Pendientes (${pendientes.length})`
-                          : `📋 Todos (${participantes.filter(p => !p.rechazado).length})`}
+                    <button key={f} onClick={() => setFiltro(f)} style={{ flex: 1, padding: 10, border: filtro === f ? '1.5px solid #4B1528' : '1px solid #DDD', background: filtro === f ? '#4B1528' : 'white', color: filtro === f ? '#F4C0D1' : '#666', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                      {f === 'aprobado' ? `✓ Aprobados (${aprobados.length})` : f === 'pendiente' ? `⏳ Pendientes (${pendientes.length})` : `📋 Todos (${participantes.filter(p => !p.rechazado).length})`}
                     </button>
                   ))}
                 </div>
@@ -1801,74 +811,15 @@ Registrado desde panel administrador`
                   </div>
                 ) : (
                   lista.map(p => (
-                    <div
-                      key={p.id}
-                      onClick={() => setSeleccionado(p)}
-                      className="card"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        cursor: 'pointer',
-                        border: `2px solid ${
-                          p.rechazado
-                            ? '#F09595'
-                            : p.aprobado
-                              ? '#C0DD97'
-                              : '#F4C0D1'
-                        }`
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: '50%',
-                          background: p.rechazado
-                            ? '#FCEBEB'
-                            : p.aprobado
-                              ? '#EAF3DE'
-                              : '#FDF5F7',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color: p.rechazado
-                            ? '#791F1F'
-                            : p.aprobado
-                              ? '#27500A'
-                              : '#4B1528'
-                        }}
-                      >
+                    <div key={p.id} onClick={() => setSeleccionado(p)} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', border: `2px solid ${p.rechazado ? '#F09595' : p.aprobado ? '#C0DD97' : '#F4C0D1'}` }}>
+                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: p.rechazado ? '#FCEBEB' : p.aprobado ? '#EAF3DE' : '#FDF5F7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: p.rechazado ? '#791F1F' : p.aprobado ? '#27500A' : '#4B1528' }}>
                         {p.nombre?.charAt(0)}
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1A1A1A' }}>
-                          {p.nombre}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                          {p.email}
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1A1A1A' }}>{p.nombre}</div>
+                        <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{p.email}</div>
                       </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          padding: '4px 10px',
-                          borderRadius: 20,
-                          background: p.rechazado
-                            ? '#FCEBEB'
-                            : p.aprobado
-                              ? '#EAF3DE'
-                              : '#FDF5F7',
-                          color: p.rechazado
-                            ? '#791F1F'
-                            : p.aprobado
-                              ? '#27500A'
-                              : '#4B1528'
-                        }}
-                      >
+                      <div style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: p.rechazado ? '#FCEBEB' : p.aprobado ? '#EAF3DE' : '#FDF5F7', color: p.rechazado ? '#791F1F' : p.aprobado ? '#27500A' : '#4B1528' }}>
                         {p.rechazado ? '✗ Rechazado' : p.aprobado ? '✓ Aprobado' : '⏳ Pendiente'}
                       </div>
                     </div>
@@ -1880,46 +831,20 @@ Registrado desde panel administrador`
             {tab === 'balance' && (
               <div>
                 <div className="card">
-                  <div className="section-title" style={{ marginBottom: 12 }}>
-                    📋 Comprobantes de pago
-                  </div>
+                  <div className="section-title" style={{ marginBottom: 12 }}>📋 Comprobantes de pago</div>
                   {aprobados.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>
-                      No hay créditos registrados
-                    </p>
+                    <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>No hay créditos registrados</p>
                   ) : (
                     aprobados.map(p =>
                       (p.creditos || []).map(c =>
                         (c.pagos || []).map((pg, idx) => (
                           <div key={`${p.id}-${c.id}-${idx}`} className="row">
-                            <div
-                              style={{
-                                background: '#EAF3DE',
-                                color: '#27500A',
-                                width: 32,
-                                height: 32,
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                flexShrink: 0
-                              }}
-                            >
-                              ✓
-                            </div>
+                            <div style={{ background: '#EAF3DE', color: '#27500A', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>✓</div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600, fontSize: 13 }}>
-                                {p.nombre} - Crédito #{c.numero}, Día {pg.dia}
-                              </div>
-                              <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                                {pg.fecha}
-                              </div>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{p.nombre} - Crédito #{c.numero}, Día {pg.dia}</div>
+                              <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>{pg.fecha}</div>
                             </div>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: '#27500A' }}>
-                              Bs {pg.monto}
-                            </div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#27500A' }}>Bs {pg.monto}</div>
                           </div>
                         ))
                       )
@@ -1932,18 +857,9 @@ Registrado desde panel administrador`
         )}
       </div>
 
-      {/* BOTTOM NAV */}
       <div className="bottom-nav">
-        {[
-          ['panel', '📊 Panel'],
-          ['participantes', '👥 Participantes'],
-          ['balance', '💰 Balance']
-        ].map(([t, label]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`nav-btn ${tab === t ? 'active' : ''}`}
-          >
+        {[['panel', '📊 Panel'], ['participantes', '👥 Participantes'], ['balance', '💰 Balance']].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)} className={`nav-btn ${tab === t ? 'active' : ''}`}>
             <span className="nav-icon">{label.split(' ')[0]}</span>
             {label.split(' ')[1]}
           </button>
