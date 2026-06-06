@@ -367,7 +367,7 @@ export default function DashboardAdmin() {
   ).length
 
   const capitalEnCirculacion = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).filter(c => !c.historial).reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
+    s + (p.creditos || []).filter(c => !c.historial && c.fuente === 'capital_nuevo').reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
   const fotoLabelNuevo = {
     ciFront: '🪪 CI Anverso', ciBack: '🪪 CI Reverso', selfie: '🤳 Selfie con CI',
@@ -860,7 +860,7 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
               </div>
 
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Capital + ganancias recuperados:</div>
+                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Capital recuperado:</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#C0DD97' }}>
                   +Bs {totalRecaudado.toLocaleString()}
                 </div>
@@ -869,7 +869,7 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '10px 0', margin: '10px 0' }} />
 
               <div>
-                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Estimado en caja (sin contar ahorros previos):</div>
+                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Dinero en mano ahora:</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: '#F4C0D1' }}>
                   Bs {(1000 - capitalEnCirculacion + totalRecaudado).toLocaleString()}
                 </div>
