@@ -26,7 +26,6 @@ export default function DashboardAdmin() {
   const [guardando, setGuardando] = useState(false)
   const [filtro, setFiltro] = useState('aprobado')
   const [marcandoDia, setMarcandoDia] = useState(null)
-  const [fuente, setFuente] = useState('capital_nuevo')
 
   const [editandoCredito, setEditandoCredito] = useState(null)
   const [editCredito, setEditCredito] = useState({
@@ -62,7 +61,7 @@ export default function DashboardAdmin() {
   }
 
   const setNuevo = (k, v) => setNuevoForm(f => ({ ...f, [k]: v }))
-  const setEdit  = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
+  const setEdit = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
 
   const abrirEditar = (p) => {
     setEditForm({
@@ -77,7 +76,8 @@ export default function DashboardAdmin() {
   const guardarEdicion = async () => {
     const { nombre, ci, fechaNac, celular, domicilio, cuenta, negocio } = editForm
     if (!nombre || !ci || !fechaNac || !celular || !domicilio || !cuenta || !negocio) {
-      setErrorEditar('Completa todos los campos'); return
+      setErrorEditar('Completa todos los campos')
+      return
     }
     setGuardandoEditar(true)
     await updateDoc(doc(db, 'participantes', seleccionado.id), {
@@ -95,10 +95,10 @@ export default function DashboardAdmin() {
   const abrirEditarCredito = (credito) => {
     setEditCredito({
       montoPrestado: String(credito.montoPrestado || ''),
-      montoTotal:    String(credito.montoTotal || ''),
-      aporte:        String(credito.aporte || ''),
-      fechaInicio:   credito.fechaInicio || '',
-      fuente:        credito.fuente || 'capital_nuevo'
+      montoTotal: String(credito.montoTotal || ''),
+      aporte: String(credito.aporte || ''),
+      fechaInicio: credito.fechaInicio || '',
+      fuente: credito.fuente || 'capital_nuevo'
     })
     setEditandoCredito(credito.id)
   }
@@ -111,18 +111,18 @@ export default function DashboardAdmin() {
     const mtNum = parseFloat(mt)
     const apNum = parseFloat(ap)
     const totalDias = Math.round(mtNum / apNum)
-    const ganancia  = mtNum - mpNum
+    const ganancia = mtNum - mpNum
 
     const creditos = (participante.creditos || []).map(c => {
       if (c.id !== creditoId) return c
       return {
         ...c,
         montoPrestado: mpNum,
-        montoTotal:    mtNum,
+        montoTotal: mtNum,
         ganancia,
-        aporte:        apNum,
+        aporte: apNum,
         totalDias,
-        fechaInicio:   fi,
+        fechaInicio: fi,
         fuente: f
       }
     })
@@ -139,7 +139,9 @@ export default function DashboardAdmin() {
 
   const capturarFotoNuevo = (id) => {
     const input = document.createElement('input')
-    input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment'
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.capture = 'environment'
     input.onchange = (e) => {
       const file = e.target.files[0]
       if (file) {
@@ -153,10 +155,15 @@ export default function DashboardAdmin() {
   const registrarNuevoParticipante = async () => {
     const { nombre, ci, fechaNac, celular, domicilio, cuenta, negocio, email, password } = nuevoForm
     if (!nombre || !ci || !fechaNac || !celular || !domicilio || !cuenta || !negocio || !email || !password) {
-      setErrorNuevo('Completa todos los campos obligatorios'); return
+      setErrorNuevo('Completa todos los campos obligatorios')
+      return
     }
-    if (password.length < 6) { setErrorNuevo('La contraseña debe tener al menos 6 caracteres'); return }
-    setGuardandoNuevo(true); setErrorNuevo('')
+    if (password.length < 6) {
+      setErrorNuevo('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
+    setGuardandoNuevo(true)
+    setErrorNuevo('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       await setDoc(firestoreDoc(db, 'participantes', cred.user.uid), {
@@ -166,34 +173,43 @@ export default function DashboardAdmin() {
         turno: null, monto: null, fechaTransferencia: null, pagos: [],
         creadoEn: serverTimestamp()
       })
-      const fotosCapturadas = Object.entries(nuevoFotos).filter(([, v]) => v !== null)
+      const fotosCapturadas = Object.entries(nuevoFotos)
+        .filter(([, v]) => v !== null)
         .map(([k]) => ({
           ciFront: '📷 CI Anverso', ciBack: '📷 CI Reverso',
           selfie: '🤳 Selfie con CI', negExt: '🏪 Exterior negocio',
-          negInt: '🏬 Interior negocio'
-        }[k])).join(', ')
-      const msg =
-`🆕 *NUEVO REGISTRO (Admin) - Pasanaku-IA*
+          negInt: '🏪 Interior negocio'
+        }[k]))
+        .join(', ')
+      const msg = `*NUEVO REGISTRO (Admin) - Pasanaku-IA*
 
-👤 *Nombre:* ${nombre}
-🪪 *CI:* ${ci}
-📅 *Fecha nac.:* ${fechaNac}
-📱 *Celular:* ${celular}
-📍 *Domicilio:* ${domicilio}
-🏪 *Negocio:* ${negocio}
-🏦 *Cuenta:* ${cuenta}
-📧 *Email:* ${email}
+*Nombre:* ${nombre}
+*CI:* ${ci}
+*Fecha nac.:* ${fechaNac}
+*Celular:* ${celular}
+*Domicilio:* ${domicilio}
+*Negocio:* ${negocio}
+*Cuenta:* ${cuenta}
+*Email:* ${email}
 
-📸 *Fotos:* ${fotosCapturadas || 'No se tomaron fotos — solicitarlas al participante'}
+*Fotos:* ${fotosCapturadas || 'No se tomaron fotos - solicitarlas al participante'}
 
-⚠️ *Envía las fotos pendientes en este chat si las tienes:*
-1️⃣ CI Anverso · 2️⃣ CI Reverso · 3️⃣ Selfie con CI
-4️⃣ Foto exterior negocio · 5️⃣ Foto interior negocio
+*Envía las fotos pendientes en este chat si las tienes:*
+1️⃣ CI Anverso
+2️⃣ CI Reverso
+3️⃣ Selfie con CI
+4️⃣ Foto exterior negocio
+5️⃣ Foto interior negocio
 
-✅ Registrado desde panel administrador`
+Registrado desde panel administrador`
       window.open(`https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank')
-      setNuevoForm({ nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '', cuenta: '', negocio: '', email: '', password: '' })
-      setNuevoFotos({ ciFront: null, ciBack: null, selfie: null, negExt: null, negInt: null })
+      setNuevoForm({
+        nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '',
+        cuenta: '', negocio: '', email: '', password: ''
+      })
+      setNuevoFotos({
+        ciFront: null, ciBack: null, selfie: null, negExt: null, negInt: null
+      })
       setMostrarFormNuevo(false)
       await cargar()
     } catch (err) {
@@ -207,56 +223,75 @@ export default function DashboardAdmin() {
   const aprobar = async () => {
     if (!aporte || !monto || !montoPrestado || !fechaInicio) return
     setGuardando(true)
-    const aporteNum       = parseFloat(aporte)
-    const montoNum        = parseFloat(monto)
+    const aporteNum = parseFloat(aporte)
+    const montoNum = parseFloat(monto)
     const montoPrestadoNum = parseFloat(montoPrestado)
     const totalDias = Math.round(montoNum / aporteNum)
-    const ganancia  = montoNum - montoPrestadoNum
+    const ganancia = montoNum - montoPrestadoNum
     const credito = {
-      id: Date.now(), numero: 1,
+      id: Date.now(),
+      numero: 1,
       montoPrestado: montoPrestadoNum,
       montoTotal: montoNum,
       ganancia,
-      aporte: aporteNum, totalDias, fechaInicio,
+      aporte: aporteNum,
+      totalDias,
+      fechaInicio,
       fuente: 'capital_nuevo',
-      pagos: [], completado: false, historial: null
+      pagos: [],
+      completado: false,
+      historial: null
     }
     await updateDoc(doc(db, 'participantes', seleccionado.id), {
-      aprobado: true, rechazado: false, bienvenidaVista: false,
-      aporte: aporteNum, monto: montoNum, totalDias, fechaInicio,
+      aprobado: true,
+      rechazado: false,
+      bienvenidaVista: false,
+      aporte: aporteNum,
+      monto: montoNum,
+      totalDias,
+      fechaInicio,
       creditos: [credito]
     })
     await cargar()
     setSeleccionado(null)
-    setAporte(''); setMonto(''); setMontoPrestado(''); setFechaInicio('')
+    setAporte('')
+    setMonto('')
+    setMontoPrestado('')
+    setFechaInicio('')
     setGuardando(false)
   }
 
   const agregarCredito = async (participante) => {
-    const nuevoMontoPrestado = prompt('Monto real a prestar (Bs) — solo visible para admin:')
+    const nuevoMontoPrestado = prompt('Monto real a prestar (Bs) - solo visible para admin:')
     if (!nuevoMontoPrestado) return
-    const nuevoMonto  = prompt('Monto total a devolver (Bs):')
+    const nuevoMonto = prompt('Monto total a devolver (Bs):')
     if (!nuevoMonto) return
     const nuevoAporte = prompt('Aporte diario (Bs):')
     if (!nuevoAporte) return
-    const nuevaFecha  = prompt('Fecha de inicio (YYYY-MM-DD):')
+    const nuevaFecha = prompt('Fecha de inicio (YYYY-MM-DD):')
     if (!nuevaFecha) return
     const nuevaFuente = prompt('¿De dónde viene el capital?\n1 = Capital nuevo\n2 = Reinvertido (ganancias)')
     if (!nuevaFuente) return
 
     const montoPrestadoNum = parseFloat(nuevoMontoPrestado)
-    const montoNum  = parseFloat(nuevoMonto)
+    const montoNum = parseFloat(nuevoMonto)
     const aporteNum = parseFloat(nuevoAporte)
     const totalDias = Math.round(montoNum / aporteNum)
-    const ganancia  = montoNum - montoPrestadoNum
+    const ganancia = montoNum - montoPrestadoNum
     const creditosActuales = participante.creditos || []
     const nuevoCredito = {
-      id: Date.now(), numero: creditosActuales.length + 1,
-      montoPrestado: montoPrestadoNum, montoTotal: montoNum,
-      ganancia, aporte: aporteNum, totalDias,
+      id: Date.now(),
+      numero: creditosActuales.length + 1,
+      montoPrestado: montoPrestadoNum,
+      montoTotal: montoNum,
+      ganancia,
+      aporte: aporteNum,
+      totalDias,
       fechaInicio: nuevaFecha,
       fuente: nuevaFuente === '1' ? 'capital_nuevo' : 'reinvertido',
-      pagos: [], completado: false, historial: null
+      pagos: [],
+      completado: false,
+      historial: null
     }
     await updateDoc(doc(db, 'participantes', participante.id), {
       creditos: [...creditosActuales, nuevoCredito]
@@ -308,15 +343,16 @@ export default function DashboardAdmin() {
       if (c.id !== creditoId) return c
       const fechaFin = new Date().toISOString().split('T')[0]
       return {
-        ...c, completado: true,
+        ...c,
+        completado: true,
         historial: {
-          fechaInicio:   c.fechaInicio,
+          fechaInicio: c.fechaInicio,
           fechaFin,
           montoPrestado: c.montoPrestado,
-          montoTotal:    c.montoTotal,
-          ganancia:      c.ganancia,
-          totalPagado:   (c.pagos || []).reduce((s, p) => s + p.monto, 0),
-          fuente:        c.fuente
+          montoTotal: c.montoTotal,
+          ganancia: c.ganancia,
+          totalPagado: (c.pagos || []).reduce((s, p) => s + p.monto, 0),
+          fuente: c.fuente
         }
       }
     })
@@ -331,686 +367,1281 @@ export default function DashboardAdmin() {
   const rechazar = async () => {
     if (!window.confirm('¿Rechazar esta solicitud?')) return
     await updateDoc(doc(db, 'participantes', seleccionado.id), { rechazado: true })
-    await cargar(); setSeleccionado(null)
+    await cargar()
+    setSeleccionado(null)
   }
 
   const pendientes = participantes.filter(p => !p.aprobado && !p.rechazado)
-  const aprobados  = participantes.filter(p => p.aprobado && !p.rechazado)
+  const aprobados = participantes.filter(p => p.aprobado && !p.rechazado)
   const lista =
-    filtro === 'aprobado'  ? aprobados :
-    filtro === 'pendiente' ? pendientes :
-    participantes.filter(p => !p.rechazado)
+    filtro === 'aprobado'
+      ? aprobados
+      : filtro === 'pendiente'
+        ? pendientes
+        : participantes.filter(p => !p.rechazado)
 
   const totalRecaudado = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).reduce((sc, c) =>
-      sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0), 0), 0)
+    s +
+    (p.creditos || []).reduce(
+      (sc, c) => sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0),
+      0
+    ),
+    0
+  )
 
   const totalCapital = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).reduce((sc, c) => {
+    s +
+    (p.creditos || []).reduce((sc, c) => {
       if (c.fuente === 'reinvertido') return sc
       return sc + (c.montoPrestado || 0)
-    }, 0), 0)
+    }, 0),
+    0
+  )
 
   const totalGanancias = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).filter(c => c.historial)
-      .reduce((sc, c) => sc + (c.ganancia || 0), 0), 0)
+    s +
+    (p.creditos || [])
+      .filter(c => c.historial)
+      .reduce((sc, c) => sc + (c.ganancia || 0), 0),
+    0
+  )
 
-  const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
+  const creditosEntregados = aprobados.reduce(
+    (s, p) => s + (p.creditos || []).length,
+    0
+  )
 
-  const creditosConcluidos = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).filter(c => c.historial).length, 0)
+  const creditosConcluidos = aprobados.reduce(
+    (s, p) => s + (p.creditos || []).filter(c => c.historial).length,
+    0
+  )
 
   const pagosHoy = aprobados.filter(p =>
     (p.creditos || []).some(c =>
-      (c.pagos || []).some(pg => pg.fecha === new Date().toISOString().split('T')[0])
+      (c.pagos || []).some(
+        pg => pg.fecha === new Date().toISOString().split('T')[0]
+      )
     )
   ).length
 
-  const capitalEnCirculacion = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).filter(c => !c.historial && c.fuente === 'capital_nuevo').reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
+  const capitalEnCirculacion = aprobados.reduce(
+    (s, p) =>
+      s +
+      (p.creditos || [])
+        .filter(c => !c.historial && c.fuente === 'capital_nuevo')
+        .reduce((sc, c) => sc + (c.montoPrestado || 0), 0),
+    0
+  )
+
+  const estimadoEnCaja = totalRecaudado - capitalEnCirculacion
 
   const fotoLabelNuevo = {
-    ciFront: '🪪 CI Anverso', ciBack: '🪪 CI Reverso', selfie: '🤳 Selfie con CI',
-    negExt: '🏪 Negocio exterior', negInt: '🏬 Negocio interior'
+    ciFront: '📷 CI Anverso',
+    ciBack: '📷 CI Reverso',
+    selfie: '🤳 Selfie con CI',
+    negExt: '🏪 Negocio exterior',
+    negInt: '🏪 Negocio interior'
   }
 
-  // ── EDITAR DATOS PARTICIPANTE ──
-  if (mostrarEditar && seleccionado) return (
-    <div className="page">
-      <div className="top-bar">
-        <button onClick={() => { setMostrarEditar(false); setErrorEditar('') }}
-          style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
-        <h1>Editar participante</h1>
-        <div style={{ width: 40 }} />
-      </div>
-      <div className="content">
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="section-title">📋 Datos personales</div>
-          <input className="input" placeholder="Nombre completo *" value={editForm.nombre} onChange={e => setEdit('nombre', e.target.value)} />
-          <input className="input" placeholder="Número de CI *" value={editForm.ci} onChange={e => setEdit('ci', e.target.value)} />
-          <input className="input" type="date" value={editForm.fechaNac} onChange={e => setEdit('fechaNac', e.target.value)} />
-          <input className="input" placeholder="Celular *" value={editForm.celular} onChange={e => setEdit('celular', e.target.value)} />
-          <input className="input" placeholder="Domicilio *" value={editForm.domicilio} onChange={e => setEdit('domicilio', e.target.value)} />
+  // EDITAR DATOS PARTICIPANTE
+  if (mostrarEditar && seleccionado) {
+    return (
+      <div className="page">
+        <div className="top-bar">
+          <button
+            onClick={() => {
+              setMostrarEditar(false)
+              setErrorEditar('')
+            }}
+            style={{
+              background: 'none',
+              color: '#F4C0D1',
+              border: 'none',
+              fontSize: 22
+            }}
+          >
+            ←
+          </button>
+          <h1>Editar participante</h1>
+          <div style={{ width: 40 }} />
         </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="section-title">🏪 Negocio y cuenta</div>
-          <input className="input" placeholder="Nombre del negocio *" value={editForm.negocio} onChange={e => setEdit('negocio', e.target.value)} />
-          <input className="input" placeholder="Número de cuenta bancaria *" value={editForm.cuenta} onChange={e => setEdit('cuenta', e.target.value)} />
-        </div>
-        <div className="card" style={{ background: '#F0F4FF', border: '1px solid #C7D7FF', padding: 10 }}>
-          <p style={{ fontSize: 12, color: '#3451A0' }}>ℹ️ El correo y contraseña no se pueden editar por seguridad.</p>
-        </div>
-        {errorEditar && <div className="alert-error">{errorEditar}</div>}
-        <button className="btn-primary" onClick={guardarEdicion} disabled={guardandoEditar}
-          style={{ width: '100%', fontSize: 15, padding: 14 }}>
-          {guardandoEditar ? 'Guardando...' : '💾 Guardar cambios'}
-        </button>
-        <button className="btn-secondary" onClick={() => { setMostrarEditar(false); setErrorEditar('') }}
-          style={{ width: '100%' }}>Cancelar</button>
-      </div>
-    </div>
-  )
-
-  // ── NUEVO PARTICIPANTE ──
-  if (mostrarFormNuevo) return (
-    <div className="page">
-      <div className="top-bar">
-        <button onClick={() => { setMostrarFormNuevo(false); setErrorNuevo('') }}
-          style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
-        <h1>Nuevo participante</h1>
-        <div style={{ width: 40 }} />
-      </div>
-      <div className="content">
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="section-title">📋 Datos personales</div>
-          <input className="input" placeholder="Nombre completo *" value={nuevoForm.nombre} onChange={e => setNuevo('nombre', e.target.value)} />
-          <input className="input" placeholder="Número de CI *" value={nuevoForm.ci} onChange={e => setNuevo('ci', e.target.value)} />
-          <input className="input" type="date" value={nuevoForm.fechaNac} onChange={e => setNuevo('fechaNac', e.target.value)} />
-          <input className="input" placeholder="Celular (ej: 76710209) *" value={nuevoForm.celular} onChange={e => setNuevo('celular', e.target.value)} />
-          <input className="input" placeholder="Domicilio *" value={nuevoForm.domicilio} onChange={e => setNuevo('domicilio', e.target.value)} />
-        </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="section-title">🏪 Negocio y cuenta</div>
-          <input className="input" placeholder="Nombre del negocio *" value={nuevoForm.negocio} onChange={e => setNuevo('negocio', e.target.value)} />
-          <input className="input" placeholder="Número de cuenta bancaria *" value={nuevoForm.cuenta} onChange={e => setNuevo('cuenta', e.target.value)} />
-        </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="section-title">📸 Fotos <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>(opcional)</span></div>
-          <div className="card" style={{ background: '#FFF8E7', border: '1px solid #F5D77E', padding: 10 }}>
-            <p style={{ fontSize: 12, color: '#854F0B' }}>⚠️ Las fotos se enviarán por WhatsApp. Puedes omitirlas ahora.</p>
+        <div className="content">
+          <div
+            className="card"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div className="section-title">👤 Datos personales</div>
+            <input
+              className="input"
+              placeholder="Nombre completo *"
+              value={editForm.nombre}
+              onChange={e => setEdit('nombre', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Número de CI *"
+              value={editForm.ci}
+              onChange={e => setEdit('ci', e.target.value)}
+            />
+            <input
+              className="input"
+              type="date"
+              value={editForm.fechaNac}
+              onChange={e => setEdit('fechaNac', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Celular *"
+              value={editForm.celular}
+              onChange={e => setEdit('celular', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Domicilio *"
+              value={editForm.domicilio}
+              onChange={e => setEdit('domicilio', e.target.value)}
+            />
           </div>
-          {['ciFront', 'ciBack', 'selfie', 'negExt', 'negInt'].map(id => (
-            <div key={id} className="card"
-              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
-              onClick={() => capturarFotoNuevo(id)}>
-              {nuevoFotos[id]
-                ? <img src={nuevoFotos[id].url} alt={id} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 8 }} />
-                : <div style={{ width: 50, height: 50, background: '#F4C0D1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📷</div>
-              }
-              <div>
-                <p style={{ fontWeight: 600, fontSize: 13 }}>{fotoLabelNuevo[id]}</p>
-                <p style={{ fontSize: 11, color: nuevoFotos[id] ? '#27500A' : '#999' }}>
-                  {nuevoFotos[id] ? '✅ Foto lista' : 'Toca para agregar (opcional)'}
-                </p>
+          <div
+            className="card"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div className="section-title">🏪 Negocio y cuenta</div>
+            <input
+              className="input"
+              placeholder="Nombre del negocio *"
+              value={editForm.negocio}
+              onChange={e => setEdit('negocio', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Número de cuenta bancaria *"
+              value={editForm.cuenta}
+              onChange={e => setEdit('cuenta', e.target.value)}
+            />
+          </div>
+          <div
+            className="card"
+            style={{
+              background: '#F0F4FF',
+              border: '1px solid #C7D7FF',
+              padding: 10
+            }}
+          >
+            <p style={{ fontSize: 12, color: '#3451A0' }}>
+              🔒 El correo y contraseña no se pueden editar por seguridad.
+            </p>
+          </div>
+          {errorEditar && (
+            <div className="alert alert-error">{errorEditar}</div>
+          )}
+          <button
+            className="btn-primary"
+            onClick={guardarEdicion}
+            disabled={guardandoEditar}
+            style={{ width: '100%', fontSize: 15, padding: 14 }}
+          >
+            {guardandoEditar ? 'Guardando...' : '✓ Guardar cambios'}
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              setMostrarEditar(false)
+              setErrorEditar('')
+            }}
+            style={{ width: '100%' }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // NUEVO PARTICIPANTE
+  if (mostrarFormNuevo) {
+    return (
+      <div className="page">
+        <div className="top-bar">
+          <button
+            onClick={() => {
+              setMostrarFormNuevo(false)
+              setErrorNuevo('')
+            }}
+            style={{
+              background: 'none',
+              color: '#F4C0D1',
+              border: 'none',
+              fontSize: 22
+            }}
+          >
+            ←
+          </button>
+          <h1>Nuevo participante</h1>
+          <div style={{ width: 40 }} />
+        </div>
+        <div className="content">
+          <div
+            className="card"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div className="section-title">👤 Datos personales</div>
+            <input
+              className="input"
+              placeholder="Nombre completo *"
+              value={nuevoForm.nombre}
+              onChange={e => setNuevo('nombre', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Número de CI *"
+              value={nuevoForm.ci}
+              onChange={e => setNuevo('ci', e.target.value)}
+            />
+            <input
+              className="input"
+              type="date"
+              value={nuevoForm.fechaNac}
+              onChange={e => setNuevo('fechaNac', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Celular (ej: 76710209) *"
+              value={nuevoForm.celular}
+              onChange={e => setNuevo('celular', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Domicilio *"
+              value={nuevoForm.domicilio}
+              onChange={e => setNuevo('domicilio', e.target.value)}
+            />
+          </div>
+          <div
+            className="card"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div className="section-title">🏪 Negocio y cuenta</div>
+            <input
+              className="input"
+              placeholder="Nombre del negocio *"
+              value={nuevoForm.negocio}
+              onChange={e => setNuevo('negocio', e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Número de cuenta bancaria *"
+              value={nuevoForm.cuenta}
+              onChange={e => setNuevo('cuenta', e.target.value)}
+            />
+          </div>
+          <div
+            className="card"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div className="section-title">
+              📷 Fotos{' '}
+              <span style={{ fontWeight: 400, color: '#999', fontSize: 12 }}>
+                (opcional)
+              </span>
+            </div>
+            <div
+              className="card"
+              style={{
+                background: '#FFF8E7',
+                border: '1px solid #F5D77E',
+                padding: 10
+              }}
+            >
+              <p style={{ fontSize: 12, color: '#854F0B' }}>
+                📤 Las fotos se enviarán por WhatsApp. Puedes omitirlas ahora.
+              </p>
+            </div>
+            {['ciFront', 'ciBack', 'selfie', 'negExt', 'negInt'].map(id => (
+              <div
+                key={id}
+                className="card"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  cursor: 'pointer'
+                }}
+                onClick={() => capturarFotoNuevo(id)}
+              >
+                {nuevoFotos[id] ? (
+                  <img
+                    src={nuevoFotos[id].url}
+                    alt={id}
+                    style={{
+                      width: 50,
+                      height: 50,
+                      objectFit: 'cover',
+                      borderRadius: 8
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 50,
+                      height: 50,
+                      background: '#F4C0D1',
+                      borderRadius: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 20
+                    }}
+                  >
+                    📸
+                  </div>
+                )}
+                <div>
+                  <p style={{ fontWeight: 600, fontSize: 13 }}>
+                    {fotoLabelNuevo[id]}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: nuevoFotos[id] ? '#27500A' : '#999'
+                    }}
+                  >
+                    {nuevoFotos[id]
+                      ? '✓ Foto lista'
+                      : 'Toca para agregar (opcional)'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div
+            className="card"
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div className="section-title">🔐 Acceso a la app</div>
+            <input
+              className="input"
+              type="email"
+              placeholder="Correo electrónico *"
+              value={nuevoForm.email}
+              onChange={e => setNuevo('email', e.target.value)}
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="Contraseña (mín. 6 caracteres) *"
+              value={nuevoForm.password}
+              onChange={e => setNuevo('password', e.target.value)}
+            />
+            <div
+              className="card"
+              style={{
+                background: '#F0F4FF',
+                border: '1px solid #C7D7FF',
+                padding: 10
+              }}
+            >
+              <p style={{ fontSize: 12, color: '#3451A0' }}>
+                💾 Guarda estas credenciales para dárselas al participante.
+              </p>
+            </div>
+          </div>
+          {errorNuevo && (
+            <div className="alert alert-error">{errorNuevo}</div>
+          )}
+          <button
+            className="btn-primary"
+            onClick={registrarNuevoParticipante}
+            disabled={guardandoNuevo}
+            style={{ width: '100%', fontSize: 15, padding: 14 }}
+          >
+            {guardandoNuevo
+              ? 'Registrando...'
+              : '✓ Registrar participante'}
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              setMostrarFormNuevo(false)
+              setErrorNuevo('')
+            }}
+            style={{ width: '100%' }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // PERFIL PARTICIPANTE
+  if (seleccionado) {
+    return (
+      <div className="page">
+        <div className="top-bar">
+          <button
+            onClick={() => {
+              setSeleccionado(null)
+              setEditandoCredito(null)
+            }}
+            style={{
+              background: 'none',
+              color: '#F4C0D1',
+              border: 'none',
+              fontSize: 22
+            }}
+          >
+            ←
+          </button>
+          <h1>Perfil participante</h1>
+          <button
+            onClick={() => abrirEditar(seleccionado)}
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              color: '#F4C0D1',
+              border: 'none',
+              borderRadius: 20,
+              padding: '4px 12px',
+              fontSize: 12
+            }}
+          >
+            ✏️ Editar
+          </button>
+        </div>
+        <div className="content">
+          {/* CABECERA */}
+          <div
+            style={{
+              background: '#4B1528',
+              borderRadius: 14,
+              padding: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12
+            }}
+          >
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+                color: '#F4C0D1',
+                fontWeight: 700
+              }}
+            >
+              {seleccionado.nombre?.charAt(0)}
+            </div>
+            <div>
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: '#F4C0D1'
+                }}
+              >
+                {seleccionado.nombre}
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'rgba(244,192,209,0.75)',
+                  marginTop: 2
+                }}
+              >
+                {seleccionado.negocio} · {seleccionado.email}
               </div>
             </div>
-          ))}
-        </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="section-title">🔐 Acceso a la app</div>
-          <input className="input" type="email" placeholder="Correo electrónico *" value={nuevoForm.email} onChange={e => setNuevo('email', e.target.value)} />
-          <input className="input" type="password" placeholder="Contraseña (mín. 6 caracteres) *" value={nuevoForm.password} onChange={e => setNuevo('password', e.target.value)} />
-          <div className="card" style={{ background: '#F0F4FF', border: '1px solid #C7D7FF', padding: 10 }}>
-            <p style={{ fontSize: 12, color: '#3451A0' }}>💡 Guarda estas credenciales para dárselas al participante.</p>
           </div>
-        </div>
-        {errorNuevo && <div className="alert-error">{errorNuevo}</div>}
-        <button className="btn-primary" onClick={registrarNuevoParticipante} disabled={guardandoNuevo}
-          style={{ width: '100%', fontSize: 15, padding: 14 }}>
-          {guardandoNuevo ? 'Registrando...' : '✅ Registrar participante'}
-        </button>
-        <button className="btn-secondary" onClick={() => { setMostrarFormNuevo(false); setErrorNuevo('') }}
-          style={{ width: '100%' }}>Cancelar</button>
-      </div>
-    </div>
-  )
 
-  // ── PERFIL PARTICIPANTE ──
-  if (seleccionado) return (
-    <div className="page">
-      <div className="top-bar">
-        <button onClick={() => { setSeleccionado(null); setEditandoCredito(null) }}
-          style={{ background: 'none', color: '#F4C0D1', border: 'none', fontSize: 22 }}>←</button>
-        <h1>Perfil participante</h1>
-        <button onClick={() => abrirEditar(seleccionado)}
-          style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
-          ✏️ Editar
-        </button>
-      </div>
-      <div className="content">
-
-        {/* CABECERA */}
-        <div style={{ background: '#4B1528', borderRadius: 14, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#F4C0D1', fontWeight: 700 }}>
-            {seleccionado.nombre?.charAt(0)}
-          </div>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#F4C0D1' }}>{seleccionado.nombre}</div>
-            <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.75)', marginTop: 2 }}>{seleccionado.negocio} · {seleccionado.email}</div>
-          </div>
-        </div>
-
-        {/* DATOS */}
-        <div className="card">
-          <div className="section-title" style={{ marginBottom: 10 }}>Datos personales</div>
-          {[
-            ['CI', seleccionado.ci],
-            ['Celular', seleccionado.celular],
-            ['Domicilio', seleccionado.domicilio],
-            ['Cuenta', seleccionado.cuenta],
-            ['Fecha nac.', seleccionado.fechaNac]
-          ].map(([k, v]) => (
-            <div key={k} className="info-row">
-              <span className="info-key">{k}</span>
-              <span className="info-val" style={{ fontSize: 12 }}>{v}</span>
+          {/* DATOS */}
+          <div className="card">
+            <div
+              className="section-title"
+              style={{ marginBottom: 10 }}
+            >
+              Datos personales
             </div>
-          ))}
-          {seleccionado.ubicacion?.link && (
-            <div className="info-row">
-              <span className="info-key">Ubicación</span>
-              <a href={seleccionado.ubicacion.link} target="_blank" rel="noreferrer"
-                style={{ fontSize: 12, color: '#4B1528' }}>📍 Ver en mapa</a>
-            </div>
-          )}
-        </div>
-
-        {/* FORMULARIO APROBACIÓN INICIAL */}
-        {!seleccionado.aprobado && !seleccionado.rechazado && (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="section-title">Aprobar crédito</div>
-            <div className="form-group">
-              <label>💵 Monto real a prestar (Bs) — solo visible para admin</label>
-              <input type="number" placeholder="500" value={montoPrestado} onChange={e => setMontoPrestado(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label>💰 Monto total a devolver (Bs)</label>
-              <input type="number" placeholder="600" value={monto} onChange={e => setMonto(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label>📅 Aporte diario (Bs)</label>
-              <input type="number" placeholder="25" value={aporte} onChange={e => setAporte(e.target.value)} />
-            </div>
-            {montoPrestado && monto && aporte && parseFloat(aporte) > 0 && (
-              <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 10, fontSize: 13, color: '#166534' }}>
-                💡 Préstamo: <strong>Bs {montoPrestado}</strong> · Devuelve: <strong>Bs {monto}</strong> · Ganancia: <strong>Bs {parseFloat(monto) - parseFloat(montoPrestado)}</strong><br />
-                📅 Bs {aporte}/día × <strong>{Math.round(parseFloat(monto) / parseFloat(aporte))} días</strong>
+            {[
+              ['CI', seleccionado.ci],
+              ['Celular', seleccionado.celular],
+              ['Domicilio', seleccionado.domicilio],
+              ['Cuenta', seleccionado.cuenta],
+              ['Fecha nac.', seleccionado.fechaNac]
+            ].map(([k, v]) => (
+              <div key={k} className="info-row">
+                <span className="info-key">{k}</span>
+                <span className="info-val" style={{ fontSize: 12 }}>
+                  {v}
+                </span>
+              </div>
+            ))}
+            {seleccionado.ubicacion?.link && (
+              <div className="info-row">
+                <span className="info-key">Ubicación</span>
+                <a
+                  href={seleccionado.ubicacion.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 12, color: '#4B1528' }}
+                >
+                  📍 Ver en mapa
+                </a>
               </div>
             )}
-            <div className="form-group">
-              <label>🗓️ Fecha de inicio de pagos</label>
-              <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} />
-            </div>
-            <button className="btn-primary" style={{ background: '#27500A' }} disabled={guardando} onClick={aprobar}>
-              {guardando ? 'Aprobando...' : '✅ Aprobar participante'}
-            </button>
-            <button style={{ background: 'none', color: '#791F1F', border: '1.5px solid #F09595', borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 700 }} onClick={rechazar}>
-              Rechazar solicitud
-            </button>
           </div>
-        )}
 
-        {/* CRÉDITOS */}
-        {seleccionado.aprobado && (
-          <>
-            {(seleccionado.creditos || []).map((credito) => {
-              const totalPagado = (credito.pagos || []).reduce((s, p) => s + p.monto, 0)
-              const diasPagados = (credito.pagos || []).length
-              const pct = Math.min(100, Math.round(diasPagados / credito.totalDias * 100))
-              const todosCompletos = diasPagados >= credito.totalDias
-              const yaArchivado   = !!credito.historial
-              const esteEnEdicion = editandoCredito === credito.id
-
-              return (
-                <div key={credito.id} className="card"
-                  style={{ border: `2px solid ${yaArchivado ? '#C0DD97' : todosCompletos ? '#F5D77E' : '#F4C0D1'}` }}>
-
-                  {/* CABECERA CRÉDITO */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <div className="section-title" style={{ margin: 0 }}>Crédito #{credito.numero}</div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {!yaArchivado && (
-                        <button
-                          onClick={() => esteEnEdicion ? setEditandoCredito(null) : abrirEditarCredito(credito)}
-                          style={{
-                            background: esteEnEdicion ? '#EEE' : '#FDF5F7',
-                            color: '#4B1528', border: '1px solid #F4C0D1',
-                            borderRadius: 16, padding: '3px 10px', fontSize: 11,
-                            fontWeight: 700, cursor: 'pointer'
-                          }}>
-                          {esteEnEdicion ? '✕ Cancelar' : '✏️ Editar'}
-                        </button>
-                      )}
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-                        background: yaArchivado ? '#EAF3DE' : todosCompletos ? '#FFFBEB' : '#FDF5F7',
-                        color: yaArchivado ? '#27500A' : todosCompletos ? '#854F0B' : '#4B1528'
-                      }}>
-                        {yaArchivado ? '✅ Archivado' : todosCompletos ? '🎉 Listo para archivar' : '🔄 En curso'}
-                      </span>
-                    </div>
+          {/* FORMULARIO APROBACIÓN INICIAL */}
+          {!seleccionado.aprobado && !seleccionado.rechazado && (
+            <div
+              className="card"
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+            >
+              <div className="section-title">✅ Aprobar crédito</div>
+              <div className="form-group">
+                <label>💵 Monto real a prestar (Bs) - solo visible para admin</label>
+                <input
+                  type="number"
+                  placeholder="500"
+                  value={montoPrestado}
+                  onChange={e => setMontoPrestado(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>💰 Monto total a devolver (Bs)</label>
+                <input
+                  type="number"
+                  placeholder="600"
+                  value={monto}
+                  onChange={e => setMonto(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>📅 Aporte diario (Bs)</label>
+                <input
+                  type="number"
+                  placeholder="25"
+                  value={aporte}
+                  onChange={e => setAporte(e.target.value)}
+                />
+              </div>
+              {montoPrestado &&
+                monto &&
+                aporte &&
+                parseFloat(aporte) > 0 && (
+                  <div
+                    style={{
+                      background: '#F0FDF4',
+                      border: '1px solid #86EFAC',
+                      borderRadius: 8,
+                      padding: 10,
+                      fontSize: 13,
+                      color: '#166534'
+                    }}
+                  >
+                    💵 Préstamo:{' '}
+                    <strong>Bs {montoPrestado}</strong> · Devuelve:{' '}
+                    <strong>Bs {monto}</strong> · Ganancia:{' '}
+                    <strong>
+                      Bs {parseFloat(monto) - parseFloat(montoPrestado)}
+                    </strong>
+                    <br />
+                    📅 Bs {aporte}/día ·{' '}
+                    <strong>
+                      {Math.round(
+                        parseFloat(monto) / parseFloat(aporte)
+                      )}{' '}
+                      días
+                    </strong>
                   </div>
+                )}
+              <div className="form-group">
+                <label>📆 Fecha de inicio de pagos</label>
+                <input
+                  type="date"
+                  value={fechaInicio}
+                  onChange={e => setFechaInicio(e.target.value)}
+                />
+              </div>
+              <button
+                className="btn-primary"
+                style={{ background: '#27500A' }}
+                disabled={guardando}
+                onClick={aprobar}
+              >
+                {guardando ? 'Aprobando...' : '✓ Aprobar participante'}
+              </button>
+              <button
+                style={{
+                  background: 'none',
+                  color: '#791F1F',
+                  border: '1.5px solid #F09595',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 14,
+                  fontWeight: 700
+                }}
+                onClick={rechazar}
+              >
+                ✗ Rechazar solicitud
+              </button>
+            </div>
+          )}
 
-                  {/* FORMULARIO DE EDICIÓN INLINE */}
-                  {esteEnEdicion && (
-                    <div style={{
-                      background: '#FFF8E7', border: '1.5px solid #F5D77E',
-                      borderRadius: 10, padding: 12, marginBottom: 12,
-                      display: 'flex', flexDirection: 'column', gap: 10
-                    }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#854F0B', marginBottom: 2 }}>
-                        ✏️ Editar datos del crédito
-                      </div>
-                      <div className="form-group">
-                        <label style={{ fontSize: 12 }}>💵 Monto real prestado (Bs) — solo admin</label>
-                        <input type="number" value={editCredito.montoPrestado}
-                          onChange={e => setEditCredito(f => ({ ...f, montoPrestado: e.target.value }))}
-                          placeholder="500" />
-                      </div>
-                      <div className="form-group">
-                        <label style={{ fontSize: 12 }}>💰 Monto total a devolver (Bs)</label>
-                        <input type="number" value={editCredito.montoTotal}
-                          onChange={e => setEditCredito(f => ({ ...f, montoTotal: e.target.value }))}
-                          placeholder="600" />
-                      </div>
-                      <div className="form-group">
-                        <label style={{ fontSize: 12 }}>📅 Aporte diario (Bs)</label>
-                        <input type="number" value={editCredito.aporte}
-                          onChange={e => setEditCredito(f => ({ ...f, aporte: e.target.value }))}
-                          placeholder="25" />
-                      </div>
-                      <div className="form-group">
-                        <label style={{ fontSize: 12 }}>📝 Fuente del capital</label>
-                        <select value={editCredito.fuente}
-                          onChange={e => setEditCredito(f => ({ ...f, fuente: e.target.value }))}
-                          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #F5D77E', fontSize: 12 }}>
-                          <option value="capital_nuevo">Capital nuevo</option>
-                          <option value="reinvertido">Reinvertido (ganancias)</option>
-                        </select>
-                      </div>
-                      {editCredito.montoPrestado && editCredito.montoTotal && editCredito.aporte && parseFloat(editCredito.aporte) > 0 && (
-                        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 8, fontSize: 12, color: '#166534' }}>
-                          💡 Prestado: <strong>Bs {editCredito.montoPrestado}</strong> · Devuelve: <strong>Bs {editCredito.montoTotal}</strong><br />
-                          📈 Ganancia: <strong>Bs {parseFloat(editCredito.montoTotal) - parseFloat(editCredito.montoPrestado)}</strong> ·{' '}
-                          📅 <strong>{Math.round(parseFloat(editCredito.montoTotal) / parseFloat(editCredito.aporte))} días</strong> · 📝 {editCredito.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'}
-                        </div>
-                      )}
-                      <div className="form-group">
-                        <label style={{ fontSize: 12 }}>🗓️ Fecha de inicio</label>
-                        <input type="date" value={editCredito.fechaInicio}
-                          onChange={e => setEditCredito(f => ({ ...f, fechaInicio: e.target.value }))} />
-                      </div>
-                      <button
-                        onClick={() => guardarEditarCredito(seleccionado, credito.id)}
-                        disabled={guardandoCredito}
-                        style={{
-                          background: '#4B1528', color: 'white', border: 'none',
-                          borderRadius: 10, padding: 11, fontSize: 13,
-                          fontWeight: 700, cursor: 'pointer', width: '100%'
-                        }}>
-                        {guardandoCredito ? 'Guardando...' : '💾 Guardar cambios del crédito'}
-                      </button>
-                    </div>
-                  )}
+          {/* CRÉDITOS */}
+          {seleccionado.aprobado && (
+            <>
+              {(seleccionado.creditos || []).map(credito => {
+                const totalPagado = (credito.pagos || []).reduce(
+                  (s, p) => s + p.monto,
+                  0
+                )
+                const diasPagados = (credito.pagos || []).length
+                const pct = Math.min(
+                  100,
+                  Math.round((diasPagados / credito.totalDias) * 100)
+                )
+                const todosCompletos = diasPagados >= credito.totalDias
+                const yaArchivado = !!credito.historial
+                const esteEnEdicion = editandoCredito === credito.id
 
-                  {/* DATOS ADMIN */}
-                  {!esteEnEdicion && (
-                    <div style={{ background: '#FDF5F7', borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                      <div style={{ fontSize: 11, color: '#854F0B', fontWeight: 700, marginBottom: 4 }}>🔒 Solo visible para admin</div>
-                      {[
-                        ['💵 Prestado',  `Bs ${credito.montoPrestado || '---'}`],
-                        ['💰 A devolver', `Bs ${credito.montoTotal}`],
-                        ['📈 Ganancia',  `Bs ${credito.ganancia ?? (credito.montoTotal - (credito.montoPrestado || 0))}`],
-                        ['📝 Fuente',    credito.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'],
-                      ].map(([k, v]) => (
-                        <div key={k} className="info-row" style={{ padding: '2px 0' }}>
-                          <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
-                          <span className="info-val" style={{ fontSize: 12, fontWeight: 700, color: '#4B1528' }}>{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {[
-                    ['Aporte diario', `Bs ${credito.aporte}/día`],
-                    ['Fecha inicio',  credito.fechaInicio],
-                    ['Progreso',      `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`],
-                  ].map(([k, v]) => (
-                    <div key={k} className="info-row">
-                      <span className="info-key">{k}</span>
-                      <span className="info-val">{v}</span>
-                    </div>
-                  ))}
-
-                  {/* BARRA DE PROGRESO */}
-                  <div style={{ background: '#EEE', borderRadius: 20, height: 6, margin: '10px 0' }}>
-                    <div style={{
-                      background: yaArchivado ? '#97C459' : todosCompletos ? '#EF9F27' : '#4B1528',
-                      width: `${pct}%`, height: '100%', borderRadius: 20, transition: 'width 0.3s'
-                    }} />
-                  </div>
-
-                  {/* GRILLA DE DÍAS */}
-                  {!yaArchivado && (
-                    <>
-                      <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>
-                        {todosCompletos
-                          ? '🎉 Todos los días pagados — archiva el crédito abajo'
-                          : 'Toca un día para marcarlo como pagado:'}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
-                        {Array.from({ length: credito.totalDias }, (_, i) => i + 1).map(d => {
-                          const pagado = (credito.pagos || []).find(p => p.dia === d)
-                          const cargandoEste = marcandoDia === `${credito.id}-${d}`
-                          const etiquetaFecha = fechaDia(credito.fechaInicio, d)
-                          return (
-                            <div key={d}
-                              onClick={() => !cargandoEste && !pagado && marcarPago(seleccionado, credito.id, d)}
-                              onContextMenu={(e) => { e.preventDefault(); if (pagado) desmarcarPago(seleccionado, credito.id, d) }}
-                              title={pagado
-                                ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}`
-                                : `${etiquetaFecha} — toca para marcar`}
-                              style={{
-                                borderRadius: 6, padding: '4px 2px', textAlign: 'center',
-                                fontSize: 9, fontWeight: 700, lineHeight: 1.4,
-                                background: cargandoEste ? '#FFF3CD' : pagado ? '#EAF3DE' : '#F0EFED',
-                                color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#BBB',
-                                cursor: pagado ? 'default' : 'pointer',
-                                border: pagado ? '1px solid #C0DD97' : '1px solid #EEE',
-                                userSelect: 'none'
-                              }}>
-                              <div style={{ fontSize: 10, fontWeight: 800 }}>D{d}</div>
-                              <div style={{ fontSize: 8, color: cargandoEste ? '#854F0B' : pagado ? '#27500A' : '#AAA' }}>
-                                {etiquetaFecha}
-                              </div>
-                              <div style={{ fontSize: 9 }}>
-                                {cargandoEste ? '...' : pagado ? `✓${pagado.monto}` : '---'}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
-
-                  {/* BOTÓN ARCHIVAR */}
-                  {todosCompletos && !yaArchivado && (
-                    <button
-                      onClick={() => registrarCreditoCompletado(seleccionado, credito.id)}
+                return (
+                  <div
+                    key={credito.id}
+                    className="card"
+                    style={{
+                      border: `2px solid ${
+                        yaArchivado
+                          ? '#C0DD97'
+                          : todosCompletos
+                            ? '#F5D77E'
+                            : '#F4C0D1'
+                      }`
+                    }}
+                  >
+                    {/* CABECERA CRÉDITO */}
+                    <div
                       style={{
-                        width: '100%', marginTop: 12, background: '#27500A',
-                        color: 'white', border: 'none', borderRadius: 12,
-                        padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer'
-                      }}>
-                      🏆 Registrar crédito completado
-                    </button>
-                  )}
-
-                  {/* HISTORIAL ARCHIVADO */}
-                  {yaArchivado && credito.historial && (
-                    <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 10, marginTop: 8 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#27500A', marginBottom: 6 }}>📋 Registro del crédito</div>
-                      {[
-                        ['Inicio',           credito.historial.fechaInicio],
-                        ['Finalización',     credito.historial.fechaFin],
-                        ['Capital prestado', `Bs ${credito.historial.montoPrestado}`],
-                        ['Total recibido',   `Bs ${credito.historial.totalPagado}`],
-                        ['Ganancia',         `Bs ${credito.historial.ganancia}`],
-                        ['Fuente',           credito.historial.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'],
-                      ].map(([k, v]) => (
-                        <div key={k} className="info-row" style={{ padding: '2px 0' }}>
-                          <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
-                          <span className="info-val" style={{ fontSize: 12, fontWeight: 700 }}>{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-
-            <button className="btn-secondary" onClick={() => agregarCredito(seleccionado)} style={{ width: '100%' }}>
-              ➕ Agregar nuevo crédito
-            </button>
-          </>
-        )}
-
-        {/* WHATSAPP */}
-        <button
-          style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, width: '100%' }}
-          onClick={() => window.open(WHATSAPP(seleccionado.celular,
-`Hola ${seleccionado.nombre}, te contactamos del *Pasanaku-IA*. 🌟
-
-⚠️ Te recordamos que hoy no hemos recibido tu comprobante de pago.
-
-Por favor, no olvides enviarnos el comprobante para registrar que se realizó el pago. ¡Muchas gracias! 🙏`), '_blank')}>
-          📲 Contactar por WhatsApp
-        </button>
-      </div>
-    </div>
-  )
-
-  // ── PANEL PRINCIPAL ──
-  return (
-    <div className="page">
-      <div className="top-bar">
-        <span style={{ fontSize: 22 }}>💰</span>
-        <h1>{tab === 'panel' ? 'Panel Admin' : tab === 'participantes' ? 'Participantes' : 'Balance'}</h1>
-        <button onClick={() => auth.signOut()}
-          style={{ background: 'rgba(255,255,255,0.15)', color: '#F4C0D1', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
-          Salir
-        </button>
-      </div>
-
-      {tab === 'panel' && (
-        <div className="content">
-          <div style={{ background: '#4B1528', borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Total recaudado</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#F4C0D1' }}>Bs {totalRecaudado.toLocaleString()}</div>
-          </div>
-
-          <div className="metric-grid">
-            {[
-              ['Aprobados',  aprobados.length,                          '#27500A'],
-              ['Pagaron hoy', `${pagosHoy}/${aprobados.length}`,        undefined],
-              ['Pendientes', pendientes.length,                          '#854F0B'],
-              ['Recaudado',  `Bs ${totalRecaudado}`,                    '#27500A'],
-            ].map(([label, val, color]) => (
-              <div key={label} className="metric-card">
-                <div className="metric-label">{label}</div>
-                <div className="metric-value" style={{ color, fontSize: label === 'Recaudado' ? 13 : undefined }}>{val}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="card" style={{ background: '#1A0A10', border: '1px solid #4B1528' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#F4C0D1', marginBottom: 10 }}>📊 Resumen financiero</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-              {[
-                ['💵 Capital entregado',    `Bs ${totalCapital.toLocaleString()}`,   '#F4C0D1'],
-                ['📈 Ganancias cobradas',   `Bs ${totalGanancias.toLocaleString()}`, '#C0DD97'],
-                ['📋 Créditos entregados',  creditosEntregados,                      '#F4C0D1'],
-                ['✅ Créditos concluidos',  creditosConcluidos,                      '#C0DD97'],
-              ].map(([label, val, color]) => (
-                <div key={label} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(244,192,209,0.6)', marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color }}>{val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* BALANCE EN CAJA */}
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12, borderLeft: '3px solid #C0DD97' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#C0DD97', marginBottom: 10 }}>💰 Balance en caja (Pasanaku)</div>
-              
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Capital prestado (activo):</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#F09595' }}>
-                  -Bs {capitalEnCirculacion.toLocaleString()}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Capital recuperado:</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#C0DD97' }}>
-                  +Bs {totalRecaudado.toLocaleString()}
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '10px 0', margin: '10px 0' }} />
-
-              <div>
-                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Dinero en mano ahora:</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#F4C0D1' }}>
-                  Bs {(1000 - capitalEnCirculacion + totalRecaudado).toLocaleString()}
-                </div>
-                <div style={{ fontSize: 10, color: 'rgba(244,192,209,0.5)', marginTop: 4 }}>
-                  (Capital inicial 1000 - prestado + recuperado)
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {pendientes.length > 0 && (
-            <div className="card" style={{ border: '2px solid #FAEEDA' }}>
-              <div className="section-title" style={{ color: '#854F0B', marginBottom: 10 }}>
-                ⚠️ Solicitudes pendientes ({pendientes.length})
-              </div>
-              {pendientes.slice(0, 3).map(p => (
-                <div key={p.id} className="row" onClick={() => setSeleccionado(p)} style={{ cursor: 'pointer' }}>
-                  <div className="avatar av-amber">{p.nombre?.charAt(0)}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</div>
-                    <div style={{ fontSize: 11, color: '#6B6B6B' }}>{p.negocio} · {p.celular}</div>
-                  </div>
-                  <span className="badge badge-warn">Revisar →</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="card">
-            <div className="section-title" style={{ marginBottom: 10 }}>Semáforo de riesgo</div>
-            <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', height: 10, marginBottom: 8 }}>
-              <div style={{ background: '#97C459', flex: Math.max(1, aprobados.length) }} />
-              <div style={{ background: '#EF9F27', flex: 1 }} />
-              <div style={{ background: '#E24B4A', flex: Math.max(0.1, pendientes.length) }} />
-            </div>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              {[
-                ['#97C459', 'Al día',          aprobados.length],
-                ['#EF9F27', '1 día sin pagar', 0],
-                ['#E24B4A', '2+ días sin pagar', 0]
-              ].map(([c, l, n]) => (
-                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6B6B6B' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: c }} />{l} ({n})
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'participantes' && (
-        <div className="content">
-          <button className="btn-primary" onClick={() => setMostrarFormNuevo(true)}
-            style={{ width: '100%', fontSize: 15, padding: 14, marginBottom: 4 }}>
-            ➕ Nuevo participante
-          </button>
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-            {[['aprobado','Aprobados'], ['pendiente','Pendientes'], ['todos','Todos']].map(([id, label]) => (
-              <button key={id} onClick={() => setFiltro(id)} style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                whiteSpace: 'nowrap', border: '1px solid #EEE',
-                background: filtro === id ? '#4B1528' : 'white',
-                color: filtro === id ? '#F4C0D1' : '#6B6B6B'
-              }}>{label}</button>
-            ))}
-          </div>
-          {cargando ? <div className="spinner" /> : (
-            <div className="card">
-              {lista.length === 0
-                ? <p style={{ fontSize: 13, color: '#AAA', textAlign: 'center', padding: 20 }}>Sin resultados</p>
-                : lista.map(p => (
-                  <div key={p.id} className="row" onClick={() => setSeleccionado(p)} style={{ cursor: 'pointer' }}>
-                    <div className={`avatar ${p.aprobado ? 'av-green' : 'av-amber'}`}>{p.nombre?.charAt(0)}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</div>
-                      <div style={{ fontSize: 11, color: '#6B6B6B' }}>{p.negocio} · {p.ci}</div>
-                      {p.aprobado && (
-                        <div style={{ fontSize: 11, color: '#27500A', marginTop: 2 }}>
-                          {(p.creditos || []).length} crédito(s) · Bs {p.aporte}/día
-                        </div>
-                      )}
-                    </div>
-                    <span className={`badge ${p.aprobado ? 'badge-ok' : 'badge-warn'}`}>
-                      {p.aprobado ? 'Aprobado' : 'Pendiente'}
-                    </span>
-                  </div>
-                ))
-              }
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'comprobantes' && (
-        <div className="content">
-          <div className="card" style={{ background: '#4B1528' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 12, color: 'rgba(244,192,209,0.7)' }}>Total recaudado</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#F4C0D1', marginTop: 4 }}>
-                  Bs {totalRecaudado.toLocaleString()}
-                </div>
-              </div>
-              <div style={{ fontSize: 36 }}>📊</div>
-            </div>
-          </div>
-          <div className="card">
-            <div className="section-title" style={{ marginBottom: 10 }}>Resumen por participante</div>
-            {aprobados.length === 0
-              ? <p style={{ fontSize: 13, color: '#AAA', textAlign: 'center', padding: 20 }}>Sin participantes aprobados aún</p>
-              : aprobados.map(p => {
-                  const totalP     = (p.creditos || []).reduce((s, c) => s + (c.pagos || []).reduce((sc, pg) => sc + pg.monto, 0), 0)
-                  const totalDias  = (p.creditos || []).reduce((s, c) => s + c.totalDias, 0)
-                  const diasPagados = (p.creditos || []).reduce((s, c) => s + (c.pagos || []).length, 0)
-                  const pct        = totalDias > 0 ? Math.min(100, Math.round(diasPagados / totalDias * 100)) : 0
-                  return (
-                    <div key={p.id} className="row" onClick={() => setSeleccionado(p)} style={{ cursor: 'pointer' }}>
-                      <div className="avatar av-green">{p.nombre?.charAt(0)}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</div>
-                        <div style={{ fontSize: 11, color: '#6B6B6B' }}>{diasPagados} pagos · {(p.creditos || []).length} crédito(s)</div>
-                        <div style={{ background: '#EEE', borderRadius: 20, height: 5, marginTop: 4, width: 120 }}>
-                          <div style={{ background: '#4B1528', width: `${pct}%`, height: '100%', borderRadius: 20 }} />
-                        </div>
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 10
+                      }}
+                    >
+                      <div
+                        className="section-title"
+                        style={{ margin: 0 }}
+                      >
+                        💳 Crédito #{credito.numero}
                       </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#27500A' }}>Bs {totalP}</div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 6,
+                          alignItems: 'center'
+                        }}
+                      >
+                        {!yaArchivado && (
+                          <button
+                            onClick={() =>
+                              esteEnEdicion
+                                ? setEditandoCredito(null)
+                                : abrirEditarCredito(credito)
+                            }
+                            style={{
+                              background: esteEnEdicion
+                                ? '#EEE'
+                                : '#FDF5F7',
+                              color: '#4B1528',
+                              border: '1px solid #F4C0D1',
+                              borderRadius: 16,
+                              padding: '3px 10px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {esteEnEdicion
+                              ? '✗ Cancelar'
+                              : '✏️ Editar'}
+                          </button>
+                        )}
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: '3px 10px',
+                            borderRadius: 20,
+                            background: yaArchivado
+                              ? '#EAF3DE'
+                              : todosCompletos
+                                ? '#FFFBEB'
+                                : '#FDF5F7',
+                            color: yaArchivado
+                              ? '#27500A'
+                              : todosCompletos
+                                ? '#854F0B'
+                                : '#4B1528'
+                          }}
+                        >
+                          {yaArchivado
+                            ? '📦 Archivado'
+                            : todosCompletos
+                              ? '✓ Listo para archivar'
+                              : '⏳ En curso'}
+                        </span>
+                      </div>
                     </div>
-                  )
-                })
-            }
-          </div>
-        </div>
-      )}
 
-      <div className="bottom-nav">
-        {[['📊','panel','Panel'], ['👥','participantes','Participantes'], ['💰','comprobantes','Balance']].map(([icon, id, label]) => (
-          <button key={id} className={`nav-btn ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
-            <span className="nav-icon">{icon}</span>{label}
-          </button>
-        ))}
+                    {/* FORMULARIO DE EDICIÓN INLINE */}
+                    {esteEnEdicion && (
+                      <div
+                        style={{
+                          background: '#FFF8E7',
+                          border: '1.5px solid #F5D77E',
+                          borderRadius: 10,
+                          padding: 12,
+                          marginBottom: 12,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 10
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#854F0B',
+                            marginBottom: 2
+                          }}
+                        >
+                          ✏️ Editar datos del crédito
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: 12 }}>
+                            💵 Monto real prestado (Bs) - solo admin
+                          </label>
+                          <input
+                            type="number"
+                            value={editCredito.montoPrestado}
+                            onChange={e =>
+                              setEditCredito(f => ({
+                                ...f,
+                                montoPrestado: e.target.value
+                              }))
+                            }
+                            placeholder="500"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: 12 }}>
+                            💰 Monto total a devolver (Bs)
+                          </label>
+                          <input
+                            type="number"
+                            value={editCredito.montoTotal}
+                            onChange={e =>
+                              setEditCredito(f => ({
+                                ...f,
+                                montoTotal: e.target.value
+                              }))
+                            }
+                            placeholder="600"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: 12 }}>
+                            📅 Aporte diario (Bs)
+                          </label>
+                          <input
+                            type="number"
+                            value={editCredito.aporte}
+                            onChange={e =>
+                              setEditCredito(f => ({
+                                ...f,
+                                aporte: e.target.value
+                              }))
+                            }
+                            placeholder="25"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: 12 }}>
+                            📊 Fuente del capital
+                          </label>
+                          <select
+                            value={editCredito.fuente}
+                            onChange={e =>
+                              setEditCredito(f => ({
+                                ...f,
+                                fuente: e.target.value
+                              }))
+                            }
+                            style={{
+                              width: '100%',
+                              padding: 10,
+                              borderRadius: 8,
+                              border: '1px solid #F5D77E',
+                              fontSize: 12
+                            }}
+                          >
+                            <option value="capital_nuevo">
+                              Capital nuevo
+                            </option>
+                            <option value="reinvertido">
+                              Reinvertido (ganancias)
+                            </option>
+                          </select>
+                        </div>
+                        {editCredito.montoPrestado &&
+                          editCredito.montoTotal &&
+                          editCredito.aporte &&
+                          parseFloat(editCredito.aporte) > 0 && (
+                            <div
+                              style={{
+                                background: '#F0FDF4',
+                                border: '1px solid #86EFAC',
+                                borderRadius: 8,
+                                padding: 8,
+                                fontSize: 12,
+                                color: '#166534'
+                              }}
+                            >
+                              💵 Prestado:{' '}
+                              <strong>
+                                Bs {editCredito.montoPrestado}
+                              </strong>{' '}
+                              · Devuelve:{' '}
+                              <strong>
+                                Bs {editCredito.montoTotal}
+                              </strong>
+                              <br />
+                              💰 Ganancia:{' '}
+                              <strong>
+                                Bs{' '}
+                                {parseFloat(editCredito.montoTotal) -
+                                  parseFloat(
+                                    editCredito.montoPrestado
+                                  )}
+                              </strong>{' '}
+                              ·{' '}
+                              <strong>
+                                {Math.round(
+                                  parseFloat(
+                                    editCredito.montoTotal
+                                  ) / parseFloat(editCredito.aporte)
+                                )}{' '}
+                                días
+                              </strong>{' '}
+                              · {' '}
+                              {editCredito.fuente === 'capital_nuevo'
+                                ? 'Capital nuevo'
+                                : 'Reinvertido'}
+                            </div>
+                          )}
+                        <div className="form-group">
+                          <label style={{ fontSize: 12 }}>
+                            📆 Fecha de inicio
+                          </label>
+                          <input
+                            type="date"
+                            value={editCredito.fechaInicio}
+                            onChange={e =>
+                              setEditCredito(f => ({
+                                ...f,
+                                fechaInicio: e.target.value
+                              }))
+                            }
+                          />
+                        </div>
+                        <button
+                          onClick={() =>
+                            guardarEditarCredito(seleccionado, credito.id)
+                          }
+                          disabled={guardandoCredito}
+                          style={{
+                            background: '#4B1528',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 10,
+                            padding: 11,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            width: '100%'
+                          }}
+                        >
+                          {guardandoCredito
+                            ? 'Guardando...'
+                            : '✓ Guardar cambios del crédito'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* DATOS ADMIN */}
+                    {!esteEnEdicion && (
+                      <div
+                        style={{
+                          background: '#FDF5F7',
+                          borderRadius: 8,
+                          padding: 10,
+                          marginBottom: 8
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: '#854F0B',
+                            fontWeight: 700,
+                            marginBottom: 4
+                          }}
+                        >
+                          🔒 Solo visible para admin
+                        </div>
+                        {[
+                          [
+                            '💵 Prestado',
+                            `Bs ${credito.montoPrestado || '---'}`
+                          ],
+                          [
+                            '💰 A devolver',
+                            `Bs ${credito.montoTotal}`
+                          ],
+                          [
+                            '📈 Ganancia',
+                            `Bs ${
+                              credito.ganancia ??
+                              credito.montoTotal -
+                                (credito.montoPrestado || 0)
+                            }`
+                          ],
+                          [
+                            '📊 Fuente',
+                            credito.fuente === 'capital_nuevo'
+                              ? 'Capital nuevo'
+                              : 'Reinvertido'
+                          ]
+                        ].map(([k, v]) => (
+                          <div key={k} className="info-row" style={{ padding: '2px 0' }}>
+                            <span
+                              className="info-key"
+                              style={{ fontSize: 11 }}
+                            >
+                              {k}
+                            </span>
+                            <span
+                              className="info-val"
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: '#4B1528'
+                              }}
+                            >
+                              {v}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {[
+                      [
+                        '📅 Aporte diario',
+                        `Bs ${credito.aporte}/día`
+                      ],
+                      ['🗓️ Fecha inicio', credito.fechaInicio],
+                      [
+                        '📊 Progreso',
+                        `${diasPagados}/${credito.totalDias} días · Bs ${totalPagado} cobrados`
+                      ]
+                    ].map(([k, v]) => (
+                      <div key={k} className="info-row">
+                        <span className="info-key">{k}</span>
+                        <span className="info-val">{v}</span>
+                      </div>
+                    ))}
+
+                    {/* BARRA DE PROGRESO */}
+                    <div
+                      style={{
+                        background: '#EEE',
+                        borderRadius: 20,
+                        height: 6,
+                        margin: '10px 0'
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: yaArchivado
+                            ? '#97C459'
+                            : todosCompletos
+                              ? '#EF9F27'
+                              : '#4B1528',
+                          width: `${pct}%`,
+                          height: '100%',
+                          borderRadius: 20,
+                          transition: 'width 0.3s'
+                        }}
+                      />
+                    </div>
+
+                    {/* GRILLA DE DÍAS */}
+                    {!yaArchivado && (
+                      <>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#666',
+                            marginBottom: 6
+                          }}
+                        >
+                          {todosCompletos
+                            ? '✓ Todos los días pagados · archiva el crédito abajo'
+                            : '📅 Toca un día para marcarlo como pagado:'}
+                        </div>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns:
+                              'repeat(6,1fr)',
+                            gap: 4
+                          }}
+                        >
+                          {Array.from(
+                            {
+                              length: credito.totalDias
+                            },
+                            (_, i) => i + 1
+                          ).map(d => {
+                            const pagado = (credito.pagos || []).find(
+                              p => p.dia === d
+                            )
+                            const cargandoEste =
+                              marcandoDia === `${credito.id}-${d}`
+                            const etiquetaFecha = fechaDia(
+                              credito.fechaInicio,
+                              d
+                            )
+                            return (
+                              <div
+                                key={d}
+                                onClick={() =>
+                                  !cargandoEste &&
+                                  !pagado &&
+                                  marcarPago(
+                                    seleccionado,
+                                    credito.id,
+                                    d
+                                  )
+                                }
+                                onContextMenu={e => {
+                                  e.preventDefault()
+                                  if (pagado)
+                                    desmarcarPago(
+                                      seleccionado,
+                                      credito.id,
+                                      d
+                                    )
+                                }}
+                                title={
+                                  pagado
+                                    ? `Pagado el ${pagado.fecha} · Bs ${pagado.monto}`
+                                    : `${etiquetaFecha} · toca para marcar`
+                                }
+                                style={{
+                                  borderRadius: 6,
+                                  padding: '4px 2px',
+                                  textAlign: 'center',
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  lineHeight: 1.4,
+                                  background: cargandoEste
+                                    ? '#FFF3CD'
+                                    : pagado
+                                      ? '#EAF3DE'
+                                      : '#F0EFED',
+                                  color: cargandoEste
+                                    ? '#854F0B'
+                                    : pagado
+                                      ? '#27500A'
+                                      : '#BBB',
+                                  cursor: pagado
+                                    ? 'default'
+                                    : 'pointer',
+                                  border: pagado
+                                    ? '1px solid #C0DD97'
+                                    : '1px solid #EEE',
+                                  userSelect: 'none'
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 800
+                                  }}
+                                >
+                                  D{d}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 7,
+                                    marginTop: 1
+                                  }}
+                                >
+                                  {etiquetaFecha}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {/* HISTORIAL */}
+                    {yaArchivado && credito.historial && (
+                      <div
+                        style={{
+                          background: '#F5F5F5',
+                          borderRadius: 8,
+                          padding: 10,
+                          marginTop: 10
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: '#666',
+                            fontWeight: 700,
+                            marginBottom: 4
+                          }}
+                        >
+                          📦 Crédito completado
+                        </div>
+                        {[
+                          [
+                            'Inicio',
+                            credito.historial.fechaInicio
+                          ],
+                          [
+                            'Fin',
+                            credito.historial.fechaFin
+                          ],
+                          [
+                            'Total pagado',
+                            `Bs ${credito.historial.totalPagado}`
+                          ],
+                          [
+                            'Ganancia',
+                            `Bs ${credito.historial.ganancia}`
+                          ]
+                        ].map(([k, v]) => (
+                          <div
+                            key={k}
+                            className="info-row"
+                            style={{ padding: '2px 0' }}
+                          >
+                            <span
+                              className="info-key"
+                              style={{ fontSize: 11 }}
+                            >
+                              {k}
+                            </span>
+                            <span
+                              className="info-val"
+                              style={{ fontSize: 11 }}
+                            >
+                              {v}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* BOTONES DE ACCIÓN */}
+                    {!yaArchivado && todosCompletos && (
+                      <button
+                        onClick={() =>
+                          registrarCreditoCompletado(
+                            seleccionado,
+                            credito.id
+                          )
+                        }
+                        style={{
+                          background: '#27500A',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 10,
+                          padding: 10,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          marginTop: 8,
+                          width: '100%',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        📦 Archivar crédito
+                      </button>
+                    )}
+
+                    {!yaArchivado && (
+                      <button
+                        onClick={() => agregarCredito(seleccionado)}
+                        style={{
+                          background: 'none',
+                          color: '#4B1528',
+                          border: '1.5px solid #4B1528',
+                          borderRadius: 10,
+                          padding: 10,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          marginTop: 8,
+                          width: '100%',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ➕ Nuevo crédito
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
+
+          {/* BOTÓN DE WHATSAPP */}
+          {seleccionado.aprobado && (
+            <button
+              onClick={() => {
+                const msg = `Hola ${seleccionado.nombre}, te envío los detalles de tu participación en Pasanaku-IA.`
+                window.open(
+                  WHATSAPP(
+                    seleccionado.celular,
+                    msg
+                  ),
+                  '_blank'
+                )
+              }}
+              style={{
+                background: '#25D366',
+                color: 'white',
+                border: 'none',
+                borderRadius: 10,
+                padding: 12,
+                fontSize: 13,
+                fontWeight: 700,
+                width: '100%',
+                marginTop: 8,
+                cursor: 'pointer'
+              }}
+            >
+              💬 Contactar por WhatsApp
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
