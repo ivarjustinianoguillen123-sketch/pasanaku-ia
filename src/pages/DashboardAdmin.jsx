@@ -28,14 +28,12 @@ export default function DashboardAdmin() {
   const [marcandoDia, setMarcandoDia] = useState(null)
   const [fuente, setFuente] = useState('capital_nuevo')
 
-  // Edición de crédito existente
   const [editandoCredito, setEditandoCredito] = useState(null)
   const [editCredito, setEditCredito] = useState({
     montoPrestado: '', montoTotal: '', aporte: '', fechaInicio: '', fuente: 'capital_nuevo'
   })
   const [guardandoCredito, setGuardandoCredito] = useState(false)
 
-  // Nuevo participante
   const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false)
   const [nuevoForm, setNuevoForm] = useState({
     nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '',
@@ -47,7 +45,6 @@ export default function DashboardAdmin() {
   const [guardandoNuevo, setGuardandoNuevo] = useState(false)
   const [errorNuevo, setErrorNuevo] = useState('')
 
-  // Editar participante
   const [mostrarEditar, setMostrarEditar] = useState(false)
   const [editForm, setEditForm] = useState({
     nombre: '', ci: '', fechaNac: '', celular: '', domicilio: '', cuenta: '', negocio: ''
@@ -348,7 +345,6 @@ export default function DashboardAdmin() {
     s + (p.creditos || []).reduce((sc, c) =>
       sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0), 0), 0)
 
-  // CAPITAL SOLO CUENTA SI ES capital_nuevo
   const totalCapital = aprobados.reduce((s, p) =>
     s + (p.creditos || []).reduce((sc, c) => {
       if (c.fuente === 'reinvertido') return sc
@@ -369,6 +365,9 @@ export default function DashboardAdmin() {
       (c.pagos || []).some(pg => pg.fecha === new Date().toISOString().split('T')[0])
     )
   ).length
+
+  const capitalEnCirculacion = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).filter(c => !c.historial).reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
   const fotoLabelNuevo = {
     ciFront: '🪪 CI Anverso', ciBack: '🪪 CI Reverso', selfie: '🤳 Selfie con CI',
@@ -835,7 +834,7 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
 
           <div className="card" style={{ background: '#1A0A10', border: '1px solid #4B1528' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#F4C0D1', marginBottom: 10 }}>📊 Resumen financiero</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[
                 ['💵 Capital entregado',    `Bs ${totalCapital.toLocaleString()}`,   '#F4C0D1'],
                 ['📈 Ganancias cobradas',   `Bs ${totalGanancias.toLocaleString()}`, '#C0DD97'],
@@ -847,6 +846,37 @@ Por favor, no olvides enviarnos el comprobante para registrar que se realizó el
                   <div style={{ fontSize: 16, fontWeight: 700, color }}>{val}</div>
                 </div>
               ))}
+            </div>
+
+            {/* BALANCE EN CAJA */}
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12, borderLeft: '3px solid #C0DD97' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#C0DD97', marginBottom: 10 }}>💰 Balance en caja (Pasanaku)</div>
+              
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Capital prestado (activo):</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#F09595' }}>
+                  -Bs {capitalEnCirculacion.toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Capital + ganancias recuperados:</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#C0DD97' }}>
+                  +Bs {totalRecaudado.toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '10px 0', margin: '10px 0' }} />
+
+              <div>
+                <div style={{ fontSize: 11, color: 'rgba(244,192,209,0.7)', marginBottom: 4 }}>Estimado en caja (sin contar ahorros previos):</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#F4C0D1' }}>
+                  Bs {(1000 - capitalEnCirculacion + totalRecaudado).toLocaleString()}
+                </div>
+                <div style={{ fontSize: 10, color: 'rgba(244,192,209,0.5)', marginTop: 4 }}>
+                  (Capital inicial 1000 - prestado + recuperado)
+                </div>
+              </div>
             </div>
           </div>
 
