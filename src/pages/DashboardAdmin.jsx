@@ -442,7 +442,6 @@ Registrado desde panel administrador`
     negExt: '🏪 Negocio exterior',
     negInt: '🏪 Negocio interior'
   }
-
   // EDITAR DATOS PARTICIPANTE
   if (mostrarEditar && seleccionado) {
     return (
@@ -1645,6 +1644,7 @@ Registrado desde panel administrador`
       </div>
     )
   }
+
   // PANEL PRINCIPAL (ADMIN)
   return (
     <div className="page">
@@ -1713,8 +1713,8 @@ Registrado desde panel administrador`
 
                   <div style={{ fontSize: 12, color: '#F4C0D1', lineHeight: 1.8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital inicial invertido:</span>
-                      <span style={{ color: '#F4C0D1' }}>Bs 1000</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital invertido total:</span>
+                      <span style={{ color: '#F4C0D1' }}>Bs {totalCapital}</span>
                     </div>
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
                       <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital prestado activo:</span>
@@ -1755,4 +1755,200 @@ Registrado desde panel administrador`
                     color: '#F4C0D1',
                     border: 'none',
                     borderRadius: 12,
-                    padding: 14
+                    padding: 14,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    width: '100%',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ➕ Nuevo participante
+                </button>
+              </>
+            )}
+
+            {tab === 'participantes' && (
+              <>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                  {['aprobado', 'pendiente', 'todos'].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFiltro(f)}
+                      style={{
+                        flex: 1,
+                        padding: 10,
+                        border: filtro === f ? '1.5px solid #4B1528' : '1px solid #DDD',
+                        background: filtro === f ? '#4B1528' : 'white',
+                        color: filtro === f ? '#F4C0D1' : '#666',
+                        borderRadius: 8,
+                        fontWeight: 600,
+                        fontSize: 12,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {f === 'aprobado'
+                        ? `✓ Aprobados (${aprobados.length})`
+                        : f === 'pendiente'
+                          ? `⏳ Pendientes (${pendientes.length})`
+                          : `📋 Todos (${participantes.filter(p => !p.rechazado).length})`}
+                    </button>
+                  ))}
+                </div>
+
+                {lista.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                    <p style={{ fontSize: 14 }}>No hay participantes en esta categoría</p>
+                  </div>
+                ) : (
+                  lista.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => setSeleccionado(p)}
+                      className="card"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        cursor: 'pointer',
+                        border: `2px solid ${
+                          p.rechazado
+                            ? '#F09595'
+                            : p.aprobado
+                              ? '#C0DD97'
+                              : '#F4C0D1'
+                        }`
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          background: p.rechazado
+                            ? '#FCEBEB'
+                            : p.aprobado
+                              ? '#EAF3DE'
+                              : '#FDF5F7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: p.rechazado
+                            ? '#791F1F'
+                            : p.aprobado
+                              ? '#27500A'
+                              : '#4B1528'
+                        }}
+                      >
+                        {p.nombre?.charAt(0)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#1A1A1A' }}>
+                          {p.nombre}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                          {p.email}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: '4px 10px',
+                          borderRadius: 20,
+                          background: p.rechazado
+                            ? '#FCEBEB'
+                            : p.aprobado
+                              ? '#EAF3DE'
+                              : '#FDF5F7',
+                          color: p.rechazado
+                            ? '#791F1F'
+                            : p.aprobado
+                              ? '#27500A'
+                              : '#4B1528'
+                        }}
+                      >
+                        {p.rechazado ? '✗ Rechazado' : p.aprobado ? '✓ Aprobado' : '⏳ Pendiente'}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+
+            {tab === 'balance' && (
+              <div>
+                <div className="card">
+                  <div className="section-title" style={{ marginBottom: 12 }}>
+                    📋 Comprobantes de pago
+                  </div>
+                  {aprobados.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>
+                      No hay créditos registrados
+                    </p>
+                  ) : (
+                    aprobados.map(p =>
+                      (p.creditos || []).map(c =>
+                        (c.pagos || []).map((pg, idx) => (
+                          <div key={`${p.id}-${c.id}-${idx}`} className="row">
+                            <div
+                              style={{
+                                background: '#EAF3DE',
+                                color: '#27500A',
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                flexShrink: 0
+                              }}
+                            >
+                              ✓
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>
+                                {p.nombre} - Crédito #{c.numero}, Día {pg.dia}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                                {pg.fecha}
+                              </div>
+                            </div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#27500A' }}>
+                              Bs {pg.monto}
+                            </div>
+                          </div>
+                        ))
+                      )
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* BOTTOM NAV */}
+      <div className="bottom-nav">
+        {[
+          ['panel', '📊 Panel'],
+          ['participantes', '👥 Participantes'],
+          ['balance', '💰 Balance']
+        ].map(([t, label]) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`nav-btn ${tab === t ? 'active' : ''}`}
+          >
+            <span className="nav-icon">{label.split(' ')[0]}</span>
+            {label.split(' ')[1]}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
