@@ -26,11 +26,12 @@ export default function DashboardAdmin() {
   const [guardando, setGuardando] = useState(false)
   const [filtro, setFiltro] = useState('aprobado')
   const [marcandoDia, setMarcandoDia] = useState(null)
+  const [fuente, setFuente] = useState('capital_nuevo')
 
   // Edición de crédito existente
-  const [editandoCredito, setEditandoCredito] = useState(null) // creditoId
+  const [editandoCredito, setEditandoCredito] = useState(null)
   const [editCredito, setEditCredito] = useState({
-    montoPrestado: '', montoTotal: '', aporte: '', fechaInicio: ''
+    montoPrestado: '', montoTotal: '', aporte: '', fechaInicio: '', fuente: 'capital_nuevo'
   })
   const [guardandoCredito, setGuardandoCredito] = useState(false)
 
@@ -94,21 +95,20 @@ export default function DashboardAdmin() {
     setGuardandoEditar(false)
   }
 
-  // ── ABRIR EDICIÓN DE CRÉDITO ──
   const abrirEditarCredito = (credito) => {
     setEditCredito({
       montoPrestado: String(credito.montoPrestado || ''),
       montoTotal:    String(credito.montoTotal || ''),
       aporte:        String(credito.aporte || ''),
-      fechaInicio:   credito.fechaInicio || ''
+      fechaInicio:   credito.fechaInicio || '',
+      fuente:        credito.fuente || 'capital_nuevo'
     })
     setEditandoCredito(credito.id)
   }
 
-  // ── GUARDAR EDICIÓN DE CRÉDITO ──
   const guardarEditarCredito = async (participante, creditoId) => {
-    const { montoPrestado: mp, montoTotal: mt, aporte: ap, fechaInicio: fi } = editCredito
-    if (!mp || !mt || !ap || !fi) return
+    const { montoPrestado: mp, montoTotal: mt, aporte: ap, fechaInicio: fi, fuente: f } = editCredito
+    if (!mp || !mt || !ap || !fi || !f) return
     setGuardandoCredito(true)
     const mpNum = parseFloat(mp)
     const mtNum = parseFloat(mt)
@@ -125,7 +125,8 @@ export default function DashboardAdmin() {
         ganancia,
         aporte:        apNum,
         totalDias,
-        fechaInicio:   fi
+        fechaInicio:   fi,
+        fuente: f
       }
     })
 
@@ -220,6 +221,7 @@ export default function DashboardAdmin() {
       montoTotal: montoNum,
       ganancia,
       aporte: aporteNum, totalDias, fechaInicio,
+      fuente: 'capital_nuevo',
       pagos: [], completado: false, historial: null
     }
     await updateDoc(doc(db, 'participantes', seleccionado.id), {
@@ -235,10 +237,16 @@ export default function DashboardAdmin() {
 
   const agregarCredito = async (participante) => {
     const nuevoMontoPrestado = prompt('Monto real a prestar (Bs) — solo visible para admin:')
+    if (!nuevoMontoPrestado) return
     const nuevoMonto  = prompt('Monto total a devolver (Bs):')
+    if (!nuevoMonto) return
     const nuevoAporte = prompt('Aporte diario (Bs):')
+    if (!nuevoAporte) return
     const nuevaFecha  = prompt('Fecha de inicio (YYYY-MM-DD):')
-    if (!nuevoMontoPrestado || !nuevoMonto || !nuevoAporte || !nuevaFecha) return
+    if (!nuevaFecha) return
+    const nuevaFuente = prompt('¿De dónde viene el capital?\n1 = Capital nuevo\n2 = Reinvertido (ganancias)')
+    if (!nuevaFuente) return
+
     const montoPrestadoNum = parseFloat(nuevoMontoPrestado)
     const montoNum  = parseFloat(nuevoMonto)
     const aporteNum = parseFloat(nuevoAporte)
@@ -249,7 +257,9 @@ export default function DashboardAdmin() {
       id: Date.now(), numero: creditosActuales.length + 1,
       montoPrestado: montoPrestadoNum, montoTotal: montoNum,
       ganancia, aporte: aporteNum, totalDias,
-      fechaInicio: nuevaFecha, pagos: [], completado: false, historial: null
+      fechaInicio: nuevaFecha,
+      fuente: nuevaFuente === '1' ? 'capital_nuevo' : 'reinvertido',
+      pagos: [], completado: false, historial: null
     }
     await updateDoc(doc(db, 'participantes', participante.id), {
       creditos: [...creditosActuales, nuevoCredito]
@@ -308,7 +318,8 @@ export default function DashboardAdmin() {
           montoPrestado: c.montoPrestado,
           montoTotal:    c.montoTotal,
           ganancia:      c.ganancia,
-          totalPagado:   (c.pagos || []).reduce((s, p) => s + p.monto, 0)
+          totalPagado:   (c.pagos || []).reduce((s, p) => s + p.monto, 0),
+          fuente:        c.fuente
         }
       }
     })
@@ -337,8 +348,12 @@ export default function DashboardAdmin() {
     s + (p.creditos || []).reduce((sc, c) =>
       sc + (c.pagos || []).reduce((sp, pg) => sp + pg.monto, 0), 0), 0)
 
+  // CAPITAL SOLO CUENTA SI ES capital_nuevo
   const totalCapital = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
+    s + (p.creditos || []).reduce((sc, c) => {
+      if (c.fuente === 'reinvertido') return sc
+      return sc + (c.montoPrestado || 0)
+    }, 0), 0)
 
   const totalGanancias = aprobados.reduce((s, p) =>
     s + (p.creditos || []).filter(c => c.historial)
@@ -564,7 +579,6 @@ export default function DashboardAdmin() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div className="section-title" style={{ margin: 0 }}>Crédito #{credito.numero}</div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {/* BOTÓN EDITAR CRÉDITO — disponible siempre que no esté archivado */}
                       {!yaArchivado && (
                         <button
                           onClick={() => esteEnEdicion ? setEditandoCredito(null) : abrirEditarCredito(credito)}
@@ -615,11 +629,20 @@ export default function DashboardAdmin() {
                           onChange={e => setEditCredito(f => ({ ...f, aporte: e.target.value }))}
                           placeholder="25" />
                       </div>
+                      <div className="form-group">
+                        <label style={{ fontSize: 12 }}>📝 Fuente del capital</label>
+                        <select value={editCredito.fuente}
+                          onChange={e => setEditCredito(f => ({ ...f, fuente: e.target.value }))}
+                          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #F5D77E', fontSize: 12 }}>
+                          <option value="capital_nuevo">Capital nuevo</option>
+                          <option value="reinvertido">Reinvertido (ganancias)</option>
+                        </select>
+                      </div>
                       {editCredito.montoPrestado && editCredito.montoTotal && editCredito.aporte && parseFloat(editCredito.aporte) > 0 && (
                         <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: 8, fontSize: 12, color: '#166534' }}>
                           💡 Prestado: <strong>Bs {editCredito.montoPrestado}</strong> · Devuelve: <strong>Bs {editCredito.montoTotal}</strong><br />
                           📈 Ganancia: <strong>Bs {parseFloat(editCredito.montoTotal) - parseFloat(editCredito.montoPrestado)}</strong> ·{' '}
-                          📅 <strong>{Math.round(parseFloat(editCredito.montoTotal) / parseFloat(editCredito.aporte))} días</strong>
+                          📅 <strong>{Math.round(parseFloat(editCredito.montoTotal) / parseFloat(editCredito.aporte))} días</strong> · 📝 {editCredito.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'}
                         </div>
                       )}
                       <div className="form-group">
@@ -648,6 +671,7 @@ export default function DashboardAdmin() {
                         ['💵 Prestado',  `Bs ${credito.montoPrestado || '---'}`],
                         ['💰 A devolver', `Bs ${credito.montoTotal}`],
                         ['📈 Ganancia',  `Bs ${credito.ganancia ?? (credito.montoTotal - (credito.montoPrestado || 0))}`],
+                        ['📝 Fuente',    credito.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'],
                       ].map(([k, v]) => (
                         <div key={k} className="info-row" style={{ padding: '2px 0' }}>
                           <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
@@ -742,6 +766,7 @@ export default function DashboardAdmin() {
                         ['Capital prestado', `Bs ${credito.historial.montoPrestado}`],
                         ['Total recibido',   `Bs ${credito.historial.totalPagado}`],
                         ['Ganancia',         `Bs ${credito.historial.ganancia}`],
+                        ['Fuente',           credito.historial.fuente === 'capital_nuevo' ? 'Capital nuevo' : 'Reinvertido'],
                       ].map(([k, v]) => (
                         <div key={k} className="info-row" style={{ padding: '2px 0' }}>
                           <span className="info-key" style={{ fontSize: 11 }}>{k}</span>
