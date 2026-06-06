@@ -1645,3 +1645,114 @@ Registrado desde panel administrador`
       </div>
     )
   }
+  // PANEL PRINCIPAL (ADMIN)
+  return (
+    <div className="page">
+      <div className="top-bar">
+        <h1>🏛️ Panel Admin</h1>
+        <button
+          onClick={() => auth.signOut()}
+          style={{
+            background: 'rgba(255,255,255,0.15)',
+            color: '#F4C0D1',
+            border: 'none',
+            borderRadius: 20,
+            padding: '4px 12px',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+        >
+          🚪 Salir
+        </button>
+      </div>
+
+      <div className="content">
+        {cargando ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div className="spinner" />
+          </div>
+        ) : (
+          <>
+            {tab === 'panel' && (
+              <>
+                {/* MÉTRICAS */}
+                <div className="metric-grid">
+                  <div className="metric-card">
+                    <div className="metric-label">💰 Total recaudado</div>
+                    <div className="metric-value">Bs {totalRecaudado}</div>
+                  </div>
+                  <div className="metric-card">
+                    <div className="metric-label">✓ Aprobados</div>
+                    <div className="metric-value">{aprobados.length}</div>
+                  </div>
+                  <div className="metric-card">
+                    <div className="metric-label">⏳ Pendientes</div>
+                    <div className="metric-value">{pendientes.length}</div>
+                  </div>
+                  <div className="metric-card">
+                    <div className="metric-label">📊 Pagos hoy</div>
+                    <div className="metric-value">{pagosHoy}</div>
+                  </div>
+                </div>
+
+                {/* BALANCE EN CAJA */}
+                <div className="card" style={{ background: '#2D0D18', border: '1px solid #4B1528', color: '#F4C0D1' }}>
+                  <div className="section-title" style={{ color: '#F4C0D1', marginBottom: 12 }}>
+                    💰 BALANCE TOTAL EN CAJA
+                  </div>
+
+                  <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
+                    <span className="info-key" style={{ color: '#F4C0D1' }}>
+                      💵 Dinero en mano:
+                    </span>
+                    <span className="info-val" style={{ color: '#27500A', fontSize: 18, fontWeight: 700 }}>
+                      Bs {estimadoEnCaja}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: 12, color: '#F4C0D1', lineHeight: 1.8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital inicial invertido:</span>
+                      <span style={{ color: '#F4C0D1' }}>Bs 1000</span>
+                    </div>
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital prestado activo:</span>
+                      <span style={{ color: '#F4C0D1' }}>-Bs {capitalEnCirculacion}</span>
+                    </div>
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital + ganancias recuperado:</span>
+                      <span style={{ color: '#27500A' }}>+Bs {totalRecaudado}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RESUMEN FINANCIERO */}
+                <div className="card">
+                  <div className="section-title" style={{ marginBottom: 12 }}>
+                    📊 Resumen financiero
+                  </div>
+                  {[
+                    ['💵 Capital entregado', `Bs ${totalCapital}`],
+                    ['📈 Ganancias cobradas', `Bs ${totalGanancias}`],
+                    ['✅ Créditos entregados', creditosEntregados],
+                    ['📦 Créditos concluidos', creditosConcluidos]
+                  ].map(([k, v]) => (
+                    <div key={k} className="info-row">
+                      <span className="info-key">{k}</span>
+                      <span className="info-val" style={{ fontWeight: 700 }}>
+                        {v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* BOTÓN NUEVO PARTICIPANTE */}
+                <button
+                  onClick={() => setMostrarFormNuevo(true)}
+                  style={{
+                    background: '#4B1528',
+                    color: '#F4C0D1',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: 14
