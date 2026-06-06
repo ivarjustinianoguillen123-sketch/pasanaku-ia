@@ -346,38 +346,51 @@ export default function DashboardAdmin() {
   const aprobados = participantes.filter(p => p.aprobado && !p.rechazado)
   const lista = filtro === 'aprobado' ? aprobados : filtro === 'pendiente' ? pendientes : participantes.filter(p => !p.rechazado)
 
-  // FÓRMULAS CORREGIDAS SEGÚN OPUS
+  // ✅ FÓRMULAS CORREGIDAS SEGÚN TU LÓGICA CORRECTA
+  
+  // Total cobrado = suma de todos los pagos realizados
   const totalCobrado = aprobados.reduce((s, p) =>
     s + (p.creditos || []).reduce((sc, c) =>
       sc + (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0), 0), 0)
 
+  // Total prestado = suma de todos los montoPrestado de créditos activos (no archivados)
   const totalPrestado = aprobados.reduce((s, p) =>
-    s + (p.creditos || []).reduce((sc, c) =>
-      sc + (c.montoPrestado || 0), 0), 0)
+    s + (p.creditos || [])
+      .filter(c => !c.historial) // Solo créditos activos
+      .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
+  // Capital en la calle = dinero pendiente por cobrar en créditos activos
   const capitalEnCalle = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
-      .filter(c => !c.historial)
+      .filter(c => !c.historial) // Solo créditos activos
       .reduce((sc, c) => {
         const cobradoCredito = (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0)
         const pendiente = (c.montoPrestado || 0) - cobradoCredito
         return sc + Math.max(0, pendiente)
       }, 0), 0)
 
+  // Dinero en mano = Capital inicial + Total cobrado - Total prestado activo
   const dineroEnMano = CAPITAL_INICIAL + totalCobrado - totalPrestado
 
+  // Total de ganancias de créditos completados (archivados)
   const totalGanancias = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
       .filter(c => c.historial)
-      .reduce((sc, c) => sc + (c.ganancia || 0), 0), 0)
+      .reduce((sc, c) => sc + (c.historial?.ganancia || 0), 0), 0)
 
-  const totalCapitalNuevoExpuesto = aprobados.reduce((s, p) =>
+  // Capital invertido en créditos activos con fuente "capital_nuevo"
+  const totalCapitalNuevoActivo = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
       .filter(c => !c.historial && c.fuente === 'capital_nuevo')
       .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
 
+  // Total de créditos entregados
   const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
+  
+  // Total de créditos concluidos (archivados)
   const creditosConcluidos = aprobados.reduce((s, p) => s + (p.creditos || []).filter(c => c.historial).length, 0)
+  
+  // Participantes con pagos registrados hoy
   const pagosHoy = aprobados.filter(p =>
     (p.creditos || []).some(c =>
       (c.pagos || []).some(pg => pg.fecha === new Date().toISOString().split('T')[0]))).length
@@ -389,6 +402,7 @@ export default function DashboardAdmin() {
     negExt: '🏪 Negocio exterior',
     negInt: '🏪 Negocio interior'
   }
+
   // EDITAR DATOS PARTICIPANTE
   if (mostrarEditar && seleccionado) {
     return (
@@ -487,7 +501,7 @@ export default function DashboardAdmin() {
     )
   }
 
-  // PERFIL PARTICIPANTE (aquí va todo el código de creditos que ya tienes, sin cambios)
+  // PERFIL PARTICIPANTE
   if (seleccionado) {
     return (
       <div className="page">
@@ -740,7 +754,7 @@ export default function DashboardAdmin() {
                   </div>
                 </div>
 
-                {/* BALANCE EN CAJA - CORREGIDO SEGÚN OPUS */}
+                {/* ✅ BALANCE EN CAJA - FÓRMULA CORRECTA */}
                 <div className="card" style={{ background: '#2D0D18', border: '1px solid #4B1528', color: '#F4C0D1' }}>
                   <div className="section-title" style={{ color: '#F4C0D1', marginBottom: 12 }}>💰 BALANCE TOTAL EN CAJA</div>
 
@@ -750,25 +764,31 @@ export default function DashboardAdmin() {
                   </div>
 
                   <div style={{ fontSize: 12, color: '#F4C0D1', lineHeight: 1.8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EF9F27', marginBottom: 8 }}>📊 Desglose:</div>
+                    
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
                       <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital inicial:</span>
                       <span style={{ color: '#F4C0D1' }}>Bs {CAPITAL_INICIAL}</span>
                     </div>
+                    
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>+ Total cobrado (capital + ganancias):</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>+ Total cobrado:</span>
                       <span style={{ color: '#97C459' }}>+Bs {totalCobrado}</span>
                     </div>
+                    
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>− Total prestado (todos los créditos):</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>− Total prestado (activos):</span>
                       <span style={{ color: '#F09595' }}>−Bs {totalPrestado}</span>
                     </div>
-                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.4)', marginTop: 4, paddingTop: 6, borderTop: '1px dashed rgba(244,192,209,0.3)' }}>
+                    
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.4)', marginTop: 6, paddingTop: 8, borderTop: '1px dashed rgba(244,192,209,0.4)' }}>
                       <span style={{ color: '#F4C0D1', fontWeight: 700 }}>= Dinero en mano:</span>
-                      <span style={{ color: dineroEnMano >= 0 ? '#97C459' : '#F09595', fontWeight: 700 }}>Bs {dineroEnMano}</span>
+                      <span style={{ color: dineroEnMano >= 0 ? '#97C459' : '#F09595', fontWeight: 700, fontSize: 14 }}>Bs {dineroEnMano}</span>
                     </div>
-                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)', marginTop: 10 }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>🔄 Capital aún en la calle:</span>
-                      <span style={{ color: '#EF9F27' }}>Bs {capitalEnCalle}</span>
+                    
+                    <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)', marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>🔄 Pendiente por cobrar:</span>
+                      <span style={{ color: '#EF9F27', fontWeight: 700 }}>Bs {capitalEnCalle}</span>
                     </div>
                   </div>
                 </div>
@@ -776,11 +796,11 @@ export default function DashboardAdmin() {
                 <div className="card">
                   <div className="section-title" style={{ marginBottom: 12 }}>📊 Resumen financiero</div>
                   {[
-                    ['💵 Capital prestado total', `Bs ${totalPrestado}`],
-                    ['📈 Ganancias cobradas (archivados)', `Bs ${totalGanancias}`],
+                    ['💵 Capital nuevo invertido (activos)', `Bs ${totalCapitalNuevoActivo}`],
                     ['🔄 Capital en la calle', `Bs ${capitalEnCalle}`],
-                    ['✅ Créditos entregados', creditosEntregados],
-                    ['📦 Créditos concluidos', creditosConcluidos]
+                    ['📈 Ganancias en créditos archivados', `Bs ${totalGanancias}`],
+                    ['✅ Créditos entregados (total)', creditosEntregados],
+                    ['📦 Créditos completados', creditosConcluidos]
                   ].map(([k, v]) => (
                     <div key={k} className="info-row">
                       <span className="info-key">{k}</span>
