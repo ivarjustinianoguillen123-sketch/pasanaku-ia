@@ -346,40 +346,45 @@ export default function DashboardAdmin() {
   const aprobados = participantes.filter(p => p.aprobado && !p.rechazado)
   const lista = filtro === 'aprobado' ? aprobados : filtro === 'pendiente' ? pendientes : participantes.filter(p => !p.rechazado)
 
-  // ✅ FÓRMULAS CORREGIDAS - BALANCE CORRECTO
+  // ✅ FÓRMULAS CONTABLES CORRECTAS E INVARIANTES
+  
+  // 1. TODO lo cobrado: pagos de TODOS los créditos (activos + archivados)
   const totalCobrado = aprobados.reduce((s, p) =>
     s + (p.creditos || []).reduce((sc, c) =>
-      sc + (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0), 0), 0)
+      sc + (c.pagos || []).reduce((sp, pg) => sp + (Number(pg.monto) || 0), 0), 0), 0)
 
-  const totalPrestado = aprobados.reduce((s, p) =>
-    s + (p.creditos || [])
-      .filter(c => !c.historial)
-      .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
+  // 2. TODO lo prestado: montoPrestado de TODOS los créditos (activos + archivados)
+  //    No se excluye nada: el dinero salió de la caja sin importar el estado actual
+  const totalPrestadoTodos = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).reduce((sc, c) => sc + (Number(c.montoPrestado) || 0), 0), 0)
 
+  // 3. DINERO EN MANO — la única fórmula contablemente estable
+  const dineroEnMano = CAPITAL_INICIAL + totalCobrado - totalPrestadoTodos
+
+  // 4. Capital aún en la calle (solo de créditos activos): lo que falta recuperar
   const capitalEnCalle = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
       .filter(c => !c.historial)
       .reduce((sc, c) => {
-        const cobradoCredito = (c.pagos || []).reduce((sp, pg) => sp + (pg.monto || 0), 0)
-        const pendiente = (c.montoPrestado || 0) - cobradoCredito
-        return sc + Math.max(0, pendiente)
+        const cobrado = (c.pagos || []).reduce((sp, pg) => sp + (Number(pg.monto) || 0), 0)
+        return sc + Math.max(0, (Number(c.montoPrestado) || 0) - cobrado)
       }, 0), 0)
 
-  // ✅ FÓRMULA CORRECTA - SIN SUMAR CAPITAL INICIAL DE NUEVO
-  const dineroEnMano = totalCobrado - totalPrestado
+  // 5. Prestado nominal de créditos activos (solo informativo)
+  const prestadoActivo = aprobados.reduce((s, p) =>
+    s + (p.creditos || [])
+      .filter(c => !c.historial)
+      .reduce((sc, c) => sc + (Number(c.montoPrestado) || 0), 0), 0)
 
+  // 6. Métricas de apoyo
   const totalGanancias = aprobados.reduce((s, p) =>
     s + (p.creditos || [])
       .filter(c => c.historial)
-      .reduce((sc, c) => sc + (c.historial?.ganancia || 0), 0), 0)
-
-  const totalCapitalNuevoActivo = aprobados.reduce((s, p) =>
-    s + (p.creditos || [])
-      .filter(c => !c.historial && c.fuente === 'capital_nuevo')
-      .reduce((sc, c) => sc + (c.montoPrestado || 0), 0), 0)
+      .reduce((sc, c) => sc + (Number(c.ganancia) || 0), 0), 0)
 
   const creditosEntregados = aprobados.reduce((s, p) => s + (p.creditos || []).length, 0)
-  const creditosConcluidos = aprobados.reduce((s, p) => s + (p.creditos || []).filter(c => c.historial).length, 0)
+  const creditosConcluidos = aprobados.reduce((s, p) =>
+    s + (p.creditos || []).filter(c => c.historial).length, 0)
   const pagosHoy = aprobados.filter(p =>
     (p.creditos || []).some(c =>
       (c.pagos || []).some(pg => pg.fecha === new Date().toISOString().split('T')[0]))).length
@@ -563,7 +568,7 @@ export default function DashboardAdmin() {
           {seleccionado.aprobado && (
             <>
               {(seleccionado.creditos || []).map(credito => {
-                const totalPagado = (credito.pagos || []).reduce((s, p) => s + p.monto, 0)
+                const totalPagado = (credito.pagos || []).reduce((s, p) => s + (Number(p.monto) || 0), 0)
                 const diasPagados = (credito.pagos || []).length
                 const pct = Math.min(100, Math.round((diasPagados / credito.totalDias) * 100))
                 const todosCompletos = diasPagados >= credito.totalDias
@@ -752,7 +757,7 @@ export default function DashboardAdmin() {
                   </div>
 
                   <div style={{ fontSize: 12, color: '#F4C0D1', lineHeight: 1.8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EF9F27', marginBottom: 8 }}>📊 Desglose:</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EF9F27', marginBottom: 8 }}>📊 Desglose contable:</div>
                     
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
                       <span style={{ color: 'rgba(244,192,209,0.75)' }}>Capital inicial:</span>
@@ -760,13 +765,13 @@ export default function DashboardAdmin() {
                     </div>
                     
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>+ Total cobrado:</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>+ Total cobrado (todos):</span>
                       <span style={{ color: '#97C459' }}>+Bs {totalCobrado}</span>
                     </div>
                     
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>− Total prestado (activos):</span>
-                      <span style={{ color: '#F09595' }}>−Bs {totalPrestado}</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>− Total prestado (todos):</span>
+                      <span style={{ color: '#F09595' }}>−Bs {totalPrestadoTodos}</span>
                     </div>
                     
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.4)', marginTop: 6, paddingTop: 8, borderTop: '1px dashed rgba(244,192,209,0.4)' }}>
@@ -775,20 +780,46 @@ export default function DashboardAdmin() {
                     </div>
                     
                     <div className="info-row" style={{ borderColor: 'rgba(244,192,209,0.2)', marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(244,192,209,0.2)' }}>
-                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>🔄 Pendiente por cobrar:</span>
+                      <span style={{ color: 'rgba(244,192,209,0.75)' }}>🔄 Capital en la calle (activos):</span>
                       <span style={{ color: '#EF9F27', fontWeight: 700 }}>Bs {capitalEnCalle}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="card">
+                  <div className="section-title" style={{ marginBottom: 10 }}>🔍 Auditoría crédito por crédito</div>
+                  <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
+                    Cada crédito: lo prestado (sale) vs. lo cobrado (entra). Estado: ⏳ activo o 📦 archivado.
+                  </div>
+                  {aprobados.length === 0 ? (
+                    <p style={{ fontSize: 12, color: '#999', textAlign: 'center', padding: 10 }}>No hay créditos aún</p>
+                  ) : (
+                    aprobados.flatMap(p =>
+                      (p.creditos || []).map(c => {
+                        const cobrado = (c.pagos || []).reduce((sp, pg) => sp + (Number(pg.monto) || 0), 0)
+                        return (
+                          <div key={`${p.id}-${c.id}`} className="info-row" style={{ padding: '4px 0' }}>
+                            <span className="info-key" style={{ fontSize: 11 }}>
+                              {p.nombre} · C#{c.numero} {c.historial ? '📦' : '⏳'}
+                            </span>
+                            <span className="info-val" style={{ fontSize: 11, fontWeight: 600 }}>
+                              −{Number(c.montoPrestado) || 0} / +{cobrado}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )
+                  )}
+                </div>
+
+                <div className="card">
                   <div className="section-title" style={{ marginBottom: 12 }}>📊 Resumen financiero</div>
                   {[
-                    ['💵 Capital nuevo invertido (activos)', `Bs ${totalCapitalNuevoActivo}`],
-                    ['🔄 Capital en la calle', `Bs ${capitalEnCalle}`],
-                    ['📈 Ganancias en créditos archivados', `Bs ${totalGanancias}`],
-                    ['✅ Créditos entregados (total)', creditosEntregados],
-                    ['📦 Créditos completados', creditosConcluidos]
+                    ['💵 Capital total prestado', `Bs ${totalPrestadoTodos}`],
+                    ['🔄 Prestado activo (en curso)', `Bs ${prestadoActivo}`],
+                    ['📈 Ganancias de archivados', `Bs ${totalGanancias}`],
+                    ['✅ Créditos entregados', creditosEntregados],
+                    ['📦 Créditos concluidos', creditosConcluidos]
                   ].map(([k, v]) => (
                     <div key={k} className="info-row">
                       <span className="info-key">{k}</span>
